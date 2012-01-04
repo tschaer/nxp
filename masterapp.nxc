@@ -1,0 +1,20 @@
+// masterapp.nxc
+// 04.12.2011 T Schaer
+// Demo Master Application
+
+#include "nxpmaster.h"
+
+unsigned int Counter;
+
+// Cyclic application program
+void Program() {
+    string sValue = "";
+
+    ClearScreen();
+    sValue = get("SlaveCtr", Slave);
+    TextOut(0, LCD_LINE1, ME);
+    TextOut(0, LCD_LINE2, "Value: " + sValue);
+    put("MasterCtr", NumToStr(Counter), Slave);
+    Counter++;
+
+}

@@ -1,0 +1,218 @@
+// master.nxc
+// 03.12.2011 T Schaer
+// 23.12.2011 No LCD output unless on timeout
+// 03.01.2012 Yield() on each state where nothing happens
+
+const string Slave = SLAVE;
+
+mutex mxPDI;
+mutex mxPDO;
+
+// Process Dictionary
+byte PDO[DICTSIZE];
+byte PDI[DICTSIZE];
+// Comm() Process Dictionary
+byte CommPDO[DICTSIZE];
+byte CommPDI[DICTSIZE];
+// Program() Process Dictionary
+byte ProgramPDO[DICTSIZE];
+byte ProgramPDI[DICTSIZE];
+
+// Protocol timeouts
+TimerObject RespMsgBeginTimer;
+TimerObject RespMsgFinishTimer;
+TimerObject StatusMsgBeginTimer;
+TimerObject StatusMsgFinishTimer;
+
+void CommInit() {
+  // Set up High Speed port
+  SetSensorType(IN_4, SENSOR_TYPE_HIGHSPEED);
+  SetHSState(HS_INITIALISE);
+  SetHSFlags(HS_UPDATE);
+  
+  // start with empty input buffer
+  SetHSInputBufferInPtr(0);
+  SetHSInputBufferOutPtr(0);
+  
+  // make sure everything gets turned on okay
+  Wait(5);
+  
+  // Set up timeouts
+  RespMsgBeginTimer.Timeout = 1000;
+  RespMsgFinishTimer.Timeout = 1000;
+  StatusMsgBeginTimer.Timeout = 1000;
+  StatusMsgFinishTimer.Timeout = 1000;
+
+}
+
+void Comm() {
+  int CommState = 0;
+  bool Done = false;
+  unsigned char MsgLen = 0, StatusMsgLen;
+  string RequestMessage, ResponseMessage;
+  string CommandMessage, StatusMessage;
+  // ##TESTING
+  string sTemp;
+  
+  resetAll(CommPDI);
+  resetAll(CommPDO);
+  
+  // Get PDO
+  Acquire(mxPDO);
+  CommPDO = PDO;
+  Release(mxPDO);
+  
+  CommandMessage = serialize_Json(Slave, CommPDO);
+  RequestMessage = ReqMessage(Slave, StrLen(CommandMessage), 0);
+  
+  while(Done == false) {
+    switch(CommState) {
+      case -1:
+        // State -1: Communication finished
+        Done = true;
+        break;
+      case 0:
+        // State 0: Initialize
+        SetHSInputBufferInPtr(0);
+        SendRS485String(RequestMessage);
+        CommState = 1;
+        break;
+      case 1:
+        // State 1: send Request Message
+        if (SendingDone()) {
+          StartTimer(RespMsgBeginTimer);
+          CommState = 2;
+        } else {
+          Yield();
+        }
+        break;
+      case 2:
+        // State 2: wait for Response Message
+        if (HSInputBufferInPtr() > 0) {
+          StartTimer(RespMsgFinishTimer);
+          CommState = 3;
+        } else if (CheckTimer(RespMsgBeginTimer) == true) {
+          TextOut(0, LCD_LINE8, "Timeout State 2");
+          CommState = -1;
+        } else {
+          Yield();
+        }
+        break;
+      case 3:
+        // State 3: receive Response Message
+        MsgLen = HSInputBufferInPtr();
+        if (MsgLen >= RESPMSGLEN) {
+          GetHSInputBuffer(0, MsgLen, ResponseMessage);
+          if (parse_Json(ResponseMessage, "Response", CommPDI) == true){
+            sTemp = lookup("len", "Response", CommPDI);
+            StatusMsgLen = StrToNum(sTemp);
+            SetHSInputBufferInPtr(0);
+            SendRS485String(CommandMessage);
+            CommState = 4;
+          } else {
+            TextOut(0, LCD_LINE8, "Bad Response");
+            CommState = -1;
+          }
+        } else if (CheckTimer(RespMsgFinishTimer) == true) {
+          TextOut(0, LCD_LINE8, "Timeout State 3");
+          CommState = -1;
+        } else {
+          Yield();
+        }
+        break;
+      case 4:
+        // State 4: send Command Message
+        if (SendingDone()) {
+          StartTimer(StatusMsgBeginTimer);
+          CommState = 5;
+        } else {
+          Yield();
+        }
+        break;
+      case 5:
+        // State 5: wait for Status Message
+        if (HSInputBufferInPtr() > 0) {
+          StartTimer(StatusMsgFinishTimer);
+          CommState = 6;
+        } else if (CheckTimer(StatusMsgBeginTimer) == true) {
+          TextOut(0, LCD_LINE8, "Timeout State 5");
+          CommState = -1;
+        } else {
+          Yield();
+        }
+        break;
+      case 6:
+        // State 6: receive Status Message
+        MsgLen = HSInputBufferInPtr();
+        if (MsgLen >= StatusMsgLen) {
+          GetHSInputBuffer(0, MsgLen, StatusMessage);
+          resetAll(CommPDI);
+          parse_Json(StatusMessage, Slave, CommPDI);
+          Acquire(mxPDI);
+          resetAll(PDI);
+          PDI = CommPDI;
+          Release(mxPDI);
+          CommState = -1;     
+        } else if (CheckTimer(StatusMsgFinishTimer) == true) {
+          TextOut(0, LCD_LINE8, "Timeout State 6");
+          CommState = -1;
+        } else {
+          Yield();
+        }
+        break;
+      default:
+        // you should never get here but...
+        TextOut(0, LCD_LINE8, "w00t! Error!       ");
+        Wait(10000);
+        CommState = -1;
+    }
+    //TextOut(0, LCD_LINE7, "State: " + NumToStr(CommState) + "        ");
+    //Wait(5);
+  }
+}
+
+// Forward reference for Master Application
+void Program();
+
+task tMain() {
+  TickTock Main;
+
+  while (true) {
+    Tick(Main);
+
+    // Input comm section
+    resetAll(ProgramPDI);  
+    Acquire(mxPDI);
+    ProgramPDI = PDI;
+    Release(mxPDI);
+    
+    Program();
+    
+    // Output comm section
+    Acquire(mxPDO);
+    resetAll(PDO);    
+    PDO = ProgramPDO;
+    Release(mxPDO);
+    resetAll(ProgramPDO);
+    
+    // cyclic execution
+    Tock(Main);
+    Wait(CYCLETIME-Elapsed(Main));
+  }  
+}
+
+task tComm() {
+
+  while(true) {
+    Comm();
+    //##TESTING
+    Wait(5);
+  }
+}
+
+task main() {
+  CommInit();
+  resetAll(PDI);
+  resetAll(PDO);
+  Precedes(tMain, tComm);
+}

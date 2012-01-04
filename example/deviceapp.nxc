@@ -1,0 +1,29 @@
+// deviceapp.nxc
+// 19.12.2011 T Schaer
+// A device controlled by a joystick
+// Two level joystick support
+
+#include "nxpslave.h"
+
+// Cyclic application program
+void Program() {
+  string JsX = "";
+  string JsY = "";
+  string JsX2 = "";
+  string JsY2 = "";
+  
+  ClearScreen();
+  JsX = get("JsX", Master);
+  JsY = get("JsY", Master);
+  JsX2 = get("JsX2", Master);
+  JsY2 = get("JsY2", Master);
+  
+  TextOut(0, LCD_LINE1, ME);
+  TextOut(0, LCD_LINE2, "JsX: " + JsX);
+  TextOut(0, LCD_LINE3, "JsY: " + JsY);
+
+  OnRev(OUT_A ,StrToNum(JsX));
+  OnRev(OUT_B, StrToNum(JsY));
+  OnFwd(OUT_C, StrToNum(JsY2));
+}
+

@@ -1,0 +1,36 @@
+// jsonserialize.nxc
+// 05.12.2011 T Schaer
+// Turn a dictionary into a string with JSON semantics
+// handle negative numbers
+
+// only recognizes Values that are numbers or quoted strings
+string serialize_Json(string Node, dict &Dict) {
+  byte NumberOfEntries, CurrentEntry, CurrentNode;
+  string Key, Value, Serialized = "";
+  char Test;
+  
+  exists(Node, CurrentNode, Dict);
+  NumberOfEntries = getNextFreeEntry(CurrentNode, Dict);
+  
+  for(CurrentEntry = 0; CurrentEntry < NumberOfEntries; CurrentEntry++) {
+    Key = getKey(CurrentNode, CurrentEntry, Dict);
+    Value = getValue(CurrentNode, CurrentEntry, Dict);
+    // first pair
+    if(CurrentEntry == 0) {
+      Serialized = "{"; 
+    } else {
+      Serialized = Serialized + ",";
+    }
+    Serialized = Serialized + "\"" + Key + "\"" + ":";
+    Test = Value[0];
+    if(isdigit(Test)) {
+      Serialized = Serialized + Value;
+    } else if (Test == '-' && isdigit(Value[1])) {
+        Serialized = Serialized + Value;
+    } else {
+      Serialized = Serialized + "\"" + Value + "\"";
+    }
+  }
+  Serialized = Serialized + "}";
+  return Serialized; 
+}

@@ -1,0 +1,132 @@
+// common.nxc
+// 03.12.2011 T Schaer
+// A place to put common code
+// Some of these bits may become their own files, one day
+// Header message generation
+
+/* ---------------- Process Dictionary API -------------*/
+#define get(Key, Node) lookup(Key, Node, ProgramPDI)
+#define put(Key, Value, Node) insert(Key, Value, Node, ProgramPDO)
+
+/* ---------------- UTILITY SECTION --------------- */
+string LeftPadTo(int TotalDigits, string Number, string PadCharacter) {
+  string Temp;
+  int i, Padding;
+  
+  Padding = TotalDigits - StrLen(Number);
+  if (Padding > 0) {
+    Temp = Number;
+    for (i=0; i<Padding; i++) {
+      Temp = PadCharacter + Temp;
+    }
+    return Temp;
+  } else {
+    return Number;
+  }
+}
+
+// Limiter for REALs
+float Limit(float Min, float Max, float Value) {  
+
+  if (Value > Max) {
+    Value = Max;
+  } else if (Value < Min) {
+    Value = Min;
+  }
+  return Value;
+}
+
+/* --------- CYCLIC TIMER API ------------- */
+struct TickTock {
+  unsigned long StartTime;
+  unsigned long EndTime;
+};
+
+void Tick(TickTock &T) {
+  T.StartTime = CurrentTick();
+}
+
+void Tock(TickTock &T) {
+  T.EndTime = CurrentTick();
+}
+
+unsigned long Elapsed(TickTock &T) {
+  return T.EndTime - T.StartTime;
+}
+
+/* -------------- COMMUNICATION SECTION ----------*/
+
+void SendRS485String(const string msg)
+{
+  byte mlen = StrLen(msg)+1;
+  SetHSOutputBuffer(0, mlen, msg);
+  SetHSOutputBufferOutPtr(0);
+  SetHSOutputBufferInPtr(mlen);
+  SetHSState(HS_SEND_DATA);
+  SetHSFlags(HS_UPDATE); //send it
+}
+
+bool SendingDone(void) {
+  return (HSOutputBufferOutPtr() == HSOutputBufferInPtr());
+}
+
+#define REQMSGLEN 47
+#define RESPMSGLEN 47
+#define ReqMessage(Name, Len, Page) HeaderMessage(Name, Len, Page, REQMSGLEN)
+#define RespMessage(Name, Len, Page) HeaderMessage(Name, Len, Page, RESPMSGLEN)
+
+string HeaderMessage(string Name, unsigned int Len, unsigned char Page, unsigned int OwnSize) {
+  string tName, tLen, tPage, tPad, tMsg, PadString = "";
+  unsigned int PadBytes;
+  
+  tName = "\"name\":\"" + Name + "\"";
+  tLen = "\"len\":" + NumToStr(Len);
+  tPage = "\"page\":" + NumToStr(Page);
+  tPad = "\"pad\":\"";
+  tMsg = "{" + tName + "," + tLen + "," + tPage + "," + tPad;
+  // Now figure out how many bytes to pad with
+  // -2 because "} is missing off the end of tPad
+  PadBytes = OwnSize - 2 - StrLen(tMsg);
+  while(PadBytes > 0) {
+    PadString = PadString + "0";
+    PadBytes--;
+  }
+  return tMsg + PadString + "\"}";
+}
+
+/* -------------- COMM TIMER API SECTION ------------- */
+struct TimerObject {
+  unsigned long Timeout; // in ms
+  unsigned long Time;
+  unsigned long PreviousTick;
+  bool Running;
+  bool Expired;
+};
+
+void StartTimer(TimerObject &Timer) {
+  Timer.Expired = false;
+  Timer.Running = true;
+  Timer.Time = 0;
+  Timer.PreviousTick = CurrentTick();
+}
+
+bool CheckTimer(TimerObject &Timer) {
+  unsigned long Elapsed;
+  
+  if (Timer.Running == true) {
+    Elapsed = CurrentTick() - Timer.PreviousTick;
+    Timer.Time += Elapsed;
+    if (Timer.Time >= Timer.Timeout) {
+      Timer.Expired = true;
+      Timer.Running = false;
+    }
+    Timer.PreviousTick = CurrentTick();
+  }
+  return Timer.Expired;
+}
+
+// Use this to stop a timer before its timeout
+void ResetTimer(TimerObject &Timer) {
+  Timer.Running = false;
+  Timer.Expired = false;
+}

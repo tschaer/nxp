@@ -1,0 +1,190 @@
+// joystickapp.nxc
+// 19.12.2011 T Schaer
+// Joystick controller with calibration
+// Uses Activation switch
+
+#include "nxpmaster.h"
+
+#define ACTIVATE SENSOR_1
+#define TOPSWITCH SENSOR_2
+#define XAXIS OUT_A
+#define YAXIS OUT_B
+
+// Global variables
+long CalNegX, CalPosX, CalNegY, CalPosY;
+float GainX, OffsetX, GainY, OffsetY;
+// Temporary global variables (could also be static)
+unsigned int CalState = 0;
+bool PrevTopSwitch = false, FirstRun = true, Calibrated = false;
+
+// ----- JOYSTICK SECTION
+
+// Get X axis values
+long GetXAxisRaw() {
+  return MotorTachoCount(XAXIS);
+}
+
+float GetXAxis() {
+  float X;
+  
+  X = GetXAxisRaw()*GainX + OffsetX;
+  return Limit(-100.0, 100.0, X);
+}
+
+// Get Y axis values
+long GetYAxisRaw() {
+  return MotorTachoCount(YAXIS);
+}
+
+float GetYAxis() {
+  float Y;
+  
+  Y = GetYAxisRaw()*GainY + OffsetY;
+  return Limit(-100.0, 100.0, Y);
+}
+
+// Cyclic Calibration routine
+// Returns TRUE when calibrated
+bool Calibrate() {
+  bool Calibrated = false;
+  
+      switch(CalState) {
+      case 0:
+        // State 0: Initial Setup
+        ClearScreen();
+        TextOut(0,LCD_LINE1,"Calibration");
+        TextOut(0,LCD_LINE3,"Press ACTIVATE");
+        CalState = 1;        
+      case 1:
+        // State 1: waiting to start
+        if (ACTIVATE == 1) {
+          CalState = 2;
+          ClearScreen();
+          TextOut(0,LCD_LINE1,"Move Joystick");
+          TextOut(0,LCD_LINE2,"fully LEFT and");
+          TextOut(0,LCD_LINE3,"push top switch");
+        }
+        break;
+      case 2:
+        // State 2: Neg X axis
+        if (TOPSWITCH == 1 && PrevTopSwitch == 0) {
+          CalNegX = GetXAxisRaw();
+          CalState = 3;
+          ClearScreen();
+          TextOut(0,LCD_LINE1,"Move Joystick");
+          TextOut(0,LCD_LINE2,"fully RIGHT and");
+          TextOut(0,LCD_LINE3,"push top switch");  
+        }
+        break;
+      case 3:
+        // State 3: Pos X axis
+        if (TOPSWITCH == 1 && PrevTopSwitch == 0) {
+          CalPosX = GetXAxisRaw();
+          CalState = 4;
+          ClearScreen();
+          TextOut(0,LCD_LINE1,"Move Joystick");
+          TextOut(0,LCD_LINE2,"fully BACK and");
+          TextOut(0,LCD_LINE3,"push top switch");  
+        }
+        break;
+      case 4:
+        // State 4: Neg Y axis
+        if (TOPSWITCH == 1 && PrevTopSwitch == 0) {
+          CalNegY = GetYAxisRaw();
+          CalState = 5;
+          ClearScreen();
+          TextOut(0,LCD_LINE1,"Move Joystick");
+          TextOut(0,LCD_LINE2,"fully FORWARD and");
+          TextOut(0,LCD_LINE3,"push top switch");  
+        }
+        break;
+      case 5:
+        // State 5: Pos Y axis
+        if (TOPSWITCH == 1 && PrevTopSwitch == 0) {
+          CalPosY = GetYAxisRaw();
+          CalState = 6;
+          ClearScreen();
+          TextOut(0,LCD_LINE1,"Done Calibration");
+          TextOut(0,LCD_LINE2,"Neg X: " + NumToStr(CalNegX));
+          TextOut(0,LCD_LINE3,"Pos X: " + NumToStr(CalPosX));
+          TextOut(0,LCD_LINE4,"Neg Y: " + NumToStr(CalNegY));
+          TextOut(0,LCD_LINE5,"Pos Y: " + NumToStr(CalPosY));
+          TextOut(0,LCD_LINE6,"Press ACTIVATE");
+        }
+        break;
+      case 6:
+        // State 6: Calibration finished
+        if (ACTIVATE == 1){
+          Calibrated = true;
+          // X axis Gain
+          GainX = 200.0 / (CalPosX - CalNegX);
+          OffsetX = 100.0 - GainX*CalPosX;
+          // Y axis Gain
+          GainY = 200.0 / (CalPosY - CalNegY);
+          OffsetY = 100.0 - GainY*CalPosY;
+          
+          ClearScreen();
+          CalState = 0;
+        }
+        break;
+      default:
+        // Calibration not active
+    }   
+    PrevTopSwitch = TOPSWITCH;
+
+  return Calibrated;
+}
+
+// ---- Cyclic application program
+void Program() {
+  long X,Y;
+  string JsX, JsY;
+  
+  // Run once at startup
+  if (FirstRun == true) {
+    SetSensor(S1, SENSOR_TOUCH);
+    SetSensor(S2, SENSOR_TOUCH);
+    FirstRun = false;
+  }
+
+  if (Calibrated == false) {
+    Calibrated = Calibrate();
+    TextOut(0,LCD_LINE1,"GainX: " + NumToStr(GainX));   
+    TextOut(0,LCD_LINE2,"OfstX: " + NumToStr(OffsetX));
+    TextOut(0,LCD_LINE3,"GainY: " + NumToStr(GainY));   
+    TextOut(0,LCD_LINE4,"OfstY: " + NumToStr(OffsetY));
+  }
+  
+  if (Calibrated == true) {
+    X = GetXAxis();
+    Y = GetYAxis();
+  } else {
+    X = GetXAxisRaw();
+    Y = GetYAxisRaw();
+  }
+
+  if (ACTIVATE == true) {
+    JsX = NumToStr(X);
+    JsY = NumToStr(Y);
+  } else {
+    JsX = NumToStr(0);
+    JsY = NumToStr(0);
+  }
+  
+  // send to slave
+  if (TOPSWITCH == false) {
+    put("JsX", JsX, Slave);
+    put("JsY", JsY, Slave);
+    put("JsX2", "0", Slave);
+    put("JsY2", "0", Slave);
+  } else {
+    put("JsX", "0", Slave);
+    put("JsY", "0", Slave);
+    put("JsX2", JsX, Slave);
+    put("JsY2", JsY, Slave);
+    
+  }
+  
+  TextOut(0,LCD_LINE5,"X: " + LeftPadTo(3,JsX," ") + "  Y: " + LeftPadTo(3,JsY," ") + "   ");   
+
+}

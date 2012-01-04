@@ -1,0 +1,126 @@
+// jsontest.nxc
+// 07.12.2011 T Schaer
+// test arrays too
+
+#include "dictionary.nxc"
+#include "jsonparse.nxc"
+
+byte BD[DICTSIZE];
+
+task main() {
+  
+  string Name = "Node1";
+  
+  string SimpleObject1 = "{\"a\": 1}";
+  string SimpleObject2 = "{\"b\":2e+3}";
+  string SimpleObject3 = "{\"c\":\"one\"}";
+  
+  string SimpleArray = "[27]";
+
+  string HardObject = "{\"a\":1,\"b\":2}";
+  string HardObject2 = "{\"d\":\"zyx\",\"e\":\"wvu\",\"f\":\"tsr\"}";
+
+  string HardArray = "[20,30]";
+  string HardArray2 = "[true,false]";
+  
+  string NestedObject = "{\"e\":{\"f\":3}}";
+  string NestedObject2 = "{\"e\":{\"f\":3},\"g\":\"text\"}";
+  
+  string NestedArray = "{\"k\":[1,2,3]}";
+  
+  string StatusMessage = "{\"mailbox1\":{\"ww\":9,\"xx\":10},\"mailbox2\":{\"yy\":11,\"zz\":12}}";
+  
+  bool Status;
+  string Mailbox1;
+  string Mailbox2;
+  string sValue;
+  
+  TextOut(0, LCD_LINE1, "Hello");
+  Wait(2000);
+  
+  TextOut(0, LCD_LINE2, SimpleObject1);
+  
+  Status = parse_Json(SimpleObject1, Name, BD);
+  sValue = lookup("a", Name, BD);
+  TextOut(0, LCD_LINE3, "a: " + sValue);
+  
+  Wait(1500);
+  ClearScreen();
+  resetAll(BD);
+
+  TextOut(0, LCD_LINE1, SimpleObject2);
+  
+  Status = parse_Json(SimpleObject2, Name, BD);
+  sValue = lookup("b", Name, BD);
+  TextOut(0, LCD_LINE2, "b: " + sValue);
+  
+  Wait(1500);
+  ClearScreen();
+  resetAll(BD);
+
+  TextOut(0, LCD_LINE1, SimpleObject3);
+  
+  Status = parse_Json(SimpleObject3, Name, BD);
+  TextOut(0, LCD_LINE2, "c: " + lookup("c", Name, BD));
+  
+  Wait(1500);
+  ClearScreen();
+  resetAll(BD);
+
+  TextOut(0, LCD_LINE1, HardObject);
+  Status = parse_Json(HardObject, Name, BD);
+  TextOut(0, LCD_LINE2, "a: " + lookup("a", Name, BD));
+  TextOut(0, LCD_LINE3, "b: " + lookup("b", Name, BD));
+
+  Wait(1500);
+  ClearScreen();
+  resetAll(BD);
+
+  TextOut(0, LCD_LINE1, HardObject2);
+  Status = parse_Json(HardObject2, Name, BD);
+  TextOut(0, LCD_LINE2, "d: " + lookup("d", Name, BD));
+  TextOut(0, LCD_LINE3, "e: " + lookup("e", Name, BD));
+  TextOut(0, LCD_LINE4, "f: " + lookup("f", Name, BD));
+
+  Wait(1500);
+  ClearScreen();
+  resetAll(BD);
+
+  TextOut(0, LCD_LINE1, NestedObject2);
+  
+  Status = parse_Json(NestedObject2, Name, BD);
+  TextOut(0, LCD_LINE2, "e: " + lookup("e", Name, BD));
+  TextOut(0, LCD_LINE3, "g: " + lookup("g", Name, BD));
+
+  Wait(1500);
+  ClearScreen();
+  resetAll(BD);
+
+  TextOut(0, LCD_LINE1, SimpleArray);
+  
+  Status = parse_Json(SimpleArray, Name, BD);
+  TextOut(0, LCD_LINE2, "0: " + lookup("0", Name, BD));
+  
+  Wait(1500);
+  ClearScreen();
+  resetAll(BD);
+
+  TextOut(0, LCD_LINE1, HardArray2);
+  
+  Status = parse_Json(HardArray2, Name, BD);
+  TextOut(0, LCD_LINE2, "0: " + lookup("0", Name, BD));
+  TextOut(0, LCD_LINE3, "1: " + lookup("1", Name, BD));
+
+  Wait(1500);
+  ClearScreen();
+  resetAll(BD);
+
+  TextOut(0, LCD_LINE1, NestedArray);
+  
+  Status = parse_Json(NestedArray, Name, BD);
+  TextOut(0, LCD_LINE2, "k: " + lookup("k", Name, BD));
+  
+
+  Wait(5000);
+            
+}

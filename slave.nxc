@@ -1,0 +1,209 @@
+// slave.nxc
+// 03.01.2012 T Schaer
+// Yield() on each state where nothing happens
+
+const string Master = MASTER;
+
+mutex mxPDI;
+mutex mxPDO;
+
+// Process Dictionary
+byte PDO[DICTSIZE];
+byte PDI[DICTSIZE];
+// Comm() Process dictionary
+byte CommPDO[DICTSIZE];
+byte CommPDI[DICTSIZE];
+// Program() Process Dicitonary
+byte ProgramPDO[DICTSIZE];
+byte ProgramPDI[DICTSIZE];
+
+// Protocol timeouts
+TimerObject ReqMsgFinishTimer;
+TimerObject CmdMsgBeginTimer;
+TimerObject CmdMsgFinishTimer;
+
+void CommInit() {
+  // Set up High Speed Port
+  SetSensorType(IN_4, SENSOR_TYPE_HIGHSPEED);
+  SetHSState(HS_INITIALISE);
+  SetHSFlags(HS_UPDATE);  
+  
+  // start with empty input buffer
+  SetHSInputBufferInPtr(0);
+  SetHSInputBufferOutPtr(0);
+  
+  // make sure everything gets turned on okay
+  Wait(5);
+  
+  // Set up the timers
+  ReqMsgFinishTimer.Timeout = 1000;
+  CmdMsgBeginTimer.Timeout = 1000;
+  CmdMsgFinishTimer.Timeout = 1000;
+
+}
+
+void Comm() {
+  int CommState = -1;
+  bool Done = false;
+  unsigned char MsgLen, CommandMsgLen;
+  string RequestMessage, ResponseMessage;  
+  string CommandMessage, StatusMessage;
+  
+  resetAll(CommPDI);
+  resetAll(CommPDO);
+  
+  // Get PDO
+  Acquire(mxPDO);
+  CommPDO = PDO;
+  Release(mxPDO);
+  
+  StatusMessage = serialize_Json(Master, CommPDO);
+  ResponseMessage = RespMessage(Master, StrLen(StatusMessage), 0);
+  
+  while (Done == false) {
+    switch(CommState) {
+      case -3:
+        // State -3: Exit state
+        SetHSInputBufferInPtr(0);
+        Done = true;
+        break;
+      case -1:
+        // State -1: Initialize
+        // KEEP
+        CommState = 0;
+        break;
+      case 0:
+        // State 0: wait for Request Message
+        if (HSInputBufferInPtr() > 0) {
+          StartTimer(ReqMsgFinishTimer);
+          CommState = 1;
+        } else {
+          Yield();
+        }
+        break;
+      case 1:
+        // State 1: receive Request Message
+        MsgLen = HSInputBufferInPtr();
+        if (MsgLen >= REQMSGLEN) {
+          GetHSInputBuffer(0, MsgLen, RequestMessage);
+          if (parse_Json(RequestMessage, "Request", CommPDI) == true) {
+            CommandMsgLen = StrToNum(lookup("len", "Request", CommPDI));
+            SetHSInputBufferInPtr(0);
+            SendRS485String(ResponseMessage);
+            CommState = 2;
+          } else {
+            TextOut(0, LCD_LINE8, "Bad Request");
+            CommState = -3;            
+          }
+        } else if (CheckTimer(ReqMsgFinishTimer) == true) {
+          TextOut(0, LCD_LINE8, "Timeout State 1");
+          CommState = -3;
+        } else {
+          Yield();
+        }
+        break;
+      case 2:
+        // State 2: send Response Message
+        if (SendingDone()) {
+          StartTimer(CmdMsgBeginTimer);
+          CommState = 3;          
+        } else {
+          Yield();
+        }
+        break;
+      case 3:
+        // State 3: Wait for Command Message
+       if (HSInputBufferInPtr() > 0) {
+        StartTimer(CmdMsgFinishTimer);
+        CommState = 4;
+       } else if (CheckTimer(CmdMsgBeginTimer) == true) {
+        TextOut(0, LCD_LINE8, "Timeout State 3");
+        CommState = -3;
+       } else {
+        Yield();
+       }
+       break;
+      case 4:
+        // State 4: receive Command Message
+        MsgLen = HSInputBufferInPtr();
+        if (MsgLen >= CommandMsgLen) {
+          GetHSInputBuffer(0, MsgLen, CommandMessage);
+          resetAll(CommPDI);
+          parse_Json(CommandMessage, Master, CommPDI);
+          Acquire(mxPDI);
+          resetAll(PDI);
+          PDI = CommPDI;
+          Release(mxPDI);
+          SendRS485String(StatusMessage);
+          CommState = 5;
+        } else if (CheckTimer(CmdMsgFinishTimer) == true) {
+          TextOut(0, LCD_LINE8, "Timeout State 4");
+          CommState = -3;
+        } else {
+          Yield();
+        }
+        break;
+      case 5:
+        // State 5: send Status Message
+        if(SendingDone()) {
+          CommState = -3;          
+        } else {
+          Yield();
+        }
+        break;
+      default:
+        // you should never get here, but...
+        TextOut(0, LCD_LINE8, "w00t! Error!       ");
+        Wait(10000);
+        CommState = -3;
+    }
+    //TextOut(0, LCD_LINE7, "State: " + NumToStr(CommState) + "        ");
+    //Wait(5);
+  }
+}
+
+// forward reference for Slave Application
+void Program();
+
+task tMain() {
+  TickTock Main;
+    
+  while (true) {
+    Tick(Main);
+    
+    // Input comm section
+    resetAll(ProgramPDI);
+    Acquire(mxPDI);
+    ProgramPDI = PDI;
+    Release(mxPDI);
+    
+    Program();
+    
+    // Output comm section
+    Acquire(mxPDO);
+    resetAll(PDO);
+    PDO = ProgramPDO;
+    Release(mxPDO);
+    resetAll(ProgramPDO);
+    
+    // cyclic execution
+    Tock(Main);
+    Wait(CYCLETIME-Elapsed(Main));
+  }
+}
+
+task tComm() {
+
+  while(true) {
+    Comm();
+    //##TESTING
+    Wait(5);
+  }
+}
+
+task main() {
+  CommInit();
+  resetAll(PDI);
+  resetAll(PDO);
+  Precedes(tMain, tComm);
+}

@@ -1,0 +1,58 @@
+// jsonsertest.nxc
+// 23.11.2011 T Schaer
+// Test jsonserialize.nxc
+
+#include "dictionary.nxc"
+#include "jsonparse.nxc"
+#include "jsonserialize.nxc"
+
+byte BD[DICTSIZE];
+
+task main() {
+  
+  string Node = "Slave1";
+  
+  string Object1 = "{\"a\":1}";
+  string Object2 = "{\"a\":1,\"b\":2}";
+  string Object3 = "{\"a\":\"one\",\"b\":\"two\"}";
+
+  bool Status;
+  string sValue, sSerial;
+  
+  TextOut(0, LCD_LINE1, "JSON serialize");
+  Wait(3000);
+  
+  // Test 1
+  TextOut(0, LCD_LINE2, Object1);
+  Status = parse_Json(Object1, Node, BD);
+  sValue = lookup("a", Node, BD);
+  TextOut(0, LCD_LINE3, "a: " + sValue);
+  sSerial = serialize_Json(Node, BD);
+  TextOut(0, LCD_LINE4, sSerial);
+  Wait(5000);
+  
+  ClearScreen();
+  resetAll(BD);
+  
+  // Test 2
+  TextOut(0, LCD_LINE2, Object2);
+  Status = parse_Json(Object2, Node, BD);
+  TextOut(0, LCD_LINE3, "a: " + lookup("a", Node, BD));
+  TextOut(0, LCD_LINE4, "b: " + lookup("b", Node, BD));
+  sSerial = serialize_Json(Node, BD);
+  TextOut(0, LCD_LINE5, sSerial);
+  Wait(5000);
+
+  ClearScreen();
+  resetAll(BD);
+
+  // Test 3
+  TextOut(0, LCD_LINE2, Object3);
+  Status = parse_Json(Object3, Node, BD);
+  TextOut(0, LCD_LINE3, "a: " + lookup("a", Node, BD));
+  TextOut(0, LCD_LINE4, "b: " + lookup("b", Node, BD));
+  sSerial = serialize_Json(Node, BD);
+  TextOut(0, LCD_LINE5, sSerial);
+  Wait(5000);
+  
+}

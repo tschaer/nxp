@@ -1,0 +1,21 @@
+// slaveapp.nxc
+// 04.12.2011 T Schaer
+// Demo Slave Application
+
+#include "nxpslave.h"
+
+unsigned int Counter = 0xFFFF;
+
+// Cyclic application program
+void Program() {
+  string sValue = "";
+  
+  ClearScreen();
+  sValue = get("MasterCtr", Master);
+  TextOut(0, LCD_LINE1, ME);
+  TextOut(0, LCD_LINE2, "Value: " + sValue);
+  put("SlaveCtr", NumToStr(Counter), Master);
+  Counter--;
+
+}
+
