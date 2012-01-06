@@ -1,0 +1,30 @@
+README
+
+nxp - NXT-PLC
+
+nxp is a framework that adds cyclic execution and distributed data exchange to John Hansens's NXC programming language.
+
+The program is written for NXT firmware version 1.28.
+
+To get the demo applications up and running:
+
+1. Install John Hansen's NXC compiler and nxtcom tool. For this to work you probably need the Lego Fantom driver also.
+2. Get two NXTs connected by a regular RJ12 cable from sensor Port 4 to sensor Port 4
+3. Compile the example programs:
+
+$ nbc masterapp.nxc -O=masterapp.rxe
+$ nbc slaveapp.nxc -O=slaveapp.rxe
+
+Connect "Master" NXT via USB and download:
+
+$ nxtcom masterapp.rxe
+
+Connect "Slave" NXT via USB and download:
+
+$ nxtcom slaveapp.rxe
+
+4. Run the program on each NXT and watch the counters on the displays. Unplug the cable and watch what happens. Reconnect the cable and watch what happens.
+
+Options for masterapp.nxc are in mxpmaster.h. Here you can set the cyclic execution rate as well as the Master's name and the Slave's name.
+
+Options for slaveapp.nxc are in nxpslave.h. 
