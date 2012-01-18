@@ -1,8 +1,11 @@
 // slave.nxc
 // 03.01.2012 T Schaer
 // Yield() on each state where nothing happens
+// 12.01.2012 Use Wait() only when waiting for messages
+//            tMain() uses MainTask_ functions
 
 const string Master = MASTER;
+unsigned int BadRequests, BadCommands, Timeouts, Cycles;
 
 mutex mxPDI;
 mutex mxPDO;
@@ -48,28 +51,29 @@ void Comm() {
   unsigned char MsgLen, CommandMsgLen;
   string RequestMessage, ResponseMessage;  
   string CommandMessage, StatusMessage;
-  
-  resetAll(CommPDI);
-  resetAll(CommPDO);
-  
-  // Get PDO
-  Acquire(mxPDO);
-  CommPDO = PDO;
-  Release(mxPDO);
-  
-  StatusMessage = serialize_Json(Master, CommPDO);
-  ResponseMessage = RespMessage(Master, StrLen(StatusMessage), 0);
-  
+  TickTock CommTaskElapsed;
+    
   while (Done == false) {
     switch(CommState) {
       case -3:
         // State -3: Exit state
         SetHSInputBufferInPtr(0);
+        Cycles++;
         Done = true;
+        Tock(CommTaskElapsed);
+        TextOut(0, LCD_LINE7, "Elapsed : " + NumToStr(Elapsed(CommTaskElapsed)));
         break;
       case -1:
         // State -1: Initialize
-        // KEEP
+        Tick(CommTaskElapsed);
+        resetAll(CommPDI);
+        resetAll(CommPDO);
+        // Get PDO
+        Acquire(mxPDO);
+        CommPDO = PDO;
+        Release(mxPDO);
+        StatusMessage = serialize_Json(Master, CommPDO);
+        ResponseMessage = RespMessage(Master, StrLen(StatusMessage), 0);        
         CommState = 0;
         break;
       case 0:
@@ -78,28 +82,28 @@ void Comm() {
           StartTimer(ReqMsgFinishTimer);
           CommState = 1;
         } else {
-          Yield();
+          Wait(5);
         }
         break;
       case 1:
         // State 1: receive Request Message
         MsgLen = HSInputBufferInPtr();
-        if (MsgLen >= REQMSGLEN) {
-          GetHSInputBuffer(0, MsgLen, RequestMessage);
+        if (MsgLen >= REQMSGLEN+1) {
+          GetHSInputBuffer(0, REQMSGLEN+1, RequestMessage);
+          SetHSInputBufferInPtr(0);
           if (parse_Json(RequestMessage, "Request", CommPDI) == true) {
             CommandMsgLen = StrToNum(lookup("len", "Request", CommPDI));
-            SetHSInputBufferInPtr(0);
             SendRS485String(ResponseMessage);
             CommState = 2;
           } else {
             TextOut(0, LCD_LINE8, "Bad Request");
+            BadRequests++;
             CommState = -3;            
           }
         } else if (CheckTimer(ReqMsgFinishTimer) == true) {
+          Timeouts++;
           TextOut(0, LCD_LINE8, "Timeout State 1");
           CommState = -3;
-        } else {
-          Yield();
         }
         break;
       case 2:
@@ -107,8 +111,6 @@ void Comm() {
         if (SendingDone()) {
           StartTimer(CmdMsgBeginTimer);
           CommState = 3;          
-        } else {
-          Yield();
         }
         break;
       case 3:
@@ -117,38 +119,40 @@ void Comm() {
         StartTimer(CmdMsgFinishTimer);
         CommState = 4;
        } else if (CheckTimer(CmdMsgBeginTimer) == true) {
+        Timeouts++;
         TextOut(0, LCD_LINE8, "Timeout State 3");
         CommState = -3;
        } else {
-        Yield();
+        Wait(5);
        }
        break;
       case 4:
         // State 4: receive Command Message
         MsgLen = HSInputBufferInPtr();
-        if (MsgLen >= CommandMsgLen) {
+        if (MsgLen >= CommandMsgLen + 1) {
           GetHSInputBuffer(0, MsgLen, CommandMessage);
           resetAll(CommPDI);
-          parse_Json(CommandMessage, Master, CommPDI);
-          Acquire(mxPDI);
-          resetAll(PDI);
-          PDI = CommPDI;
-          Release(mxPDI);
+          if (parse_Json(CommandMessage, Master, CommPDI) == false) {
+            BadCommands++;
+            TextOut(0, LCD_LINE8, "Bad Command Msg");
+          }
           SendRS485String(StatusMessage);
           CommState = 5;
         } else if (CheckTimer(CmdMsgFinishTimer) == true) {
+          Timeouts++;
           TextOut(0, LCD_LINE8, "Timeout State 4");
           CommState = -3;
-        } else {
-          Yield();
         }
         break;
       case 5:
         // State 5: send Status Message
         if(SendingDone()) {
+          // Move here temporarily so that Status Message is sent sooner
+          Acquire(mxPDI);
+          resetAll(PDI);
+          PDI = CommPDI;
+          Release(mxPDI);
           CommState = -3;          
-        } else {
-          Yield();
         }
         break;
       default:
@@ -157,8 +161,6 @@ void Comm() {
         Wait(10000);
         CommState = -3;
     }
-    //TextOut(0, LCD_LINE7, "State: " + NumToStr(CommState) + "        ");
-    //Wait(5);
   }
 }
 
@@ -167,12 +169,14 @@ void Program();
 
 task tMain() {
   TickTock Main;
-    
+  
+  MainTask_resetAll(PDO);
+  
   while (true) {
     Tick(Main);
     
     // Input comm section
-    resetAll(ProgramPDI);
+    MainTask_resetAll(ProgramPDI);
     Acquire(mxPDI);
     ProgramPDI = PDI;
     Release(mxPDI);
@@ -181,10 +185,10 @@ task tMain() {
     
     // Output comm section
     Acquire(mxPDO);
-    resetAll(PDO);
+    MainTask_resetAll(PDO);
     PDO = ProgramPDO;
     Release(mxPDO);
-    resetAll(ProgramPDO);
+    MainTask_resetAll(ProgramPDO);
     
     // cyclic execution
     Tock(Main);
@@ -193,17 +197,14 @@ task tMain() {
 }
 
 task tComm() {
+  CommTask_resetAll(PDI);
 
   while(true) {
     Comm();
-    //##TESTING
-    Wait(5);
   }
 }
 
 task main() {
   CommInit();
-  resetAll(PDI);
-  resetAll(PDO);
   Precedes(tMain, tComm);
 }

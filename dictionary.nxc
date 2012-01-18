@@ -1,12 +1,21 @@
 // dictionary.nxc
-// 07.12.2011 T. Schaer
+// 11.01.2012 T. Schaer
 // Dictionary
-// With truncation
+// With function instances
+// Note:
+// 1. Multidimensional arrays are built using single-dimensional arrays,
+//    offset constants, and access functions.
+// 2. Multiple instances of the dictionary API are made using macros
 
-// ----- Macros
-#define ArrayReplace(arSrc, idx, x) asm { replace arSrc, arSrc, idx, x }
+// Function definition is a 3-step process:
+// 1. Define a macro for a function's internal name. This allows it to be
+//    referred to inside other functions of the API
+// 2. Define a macro which contains the function's textual representation along
+//    with a configurable prefix
+// 3. Supply a prefix to the above macro to produce an instance of the function
+//    with a unique name in the symbol table
 
-// ----- Dictionary Definition
+// ***** Dictionary Data Structure Definition
 // struct Entry {
 //  Key: byte[10]
 //  Value: byte[10]
@@ -41,225 +50,235 @@
 // a cheat to be able to pass byte arrays by reference
 typedef string dict;
 
-// ----- Byte Array access functions
-safecall string getArraySubset(unsigned int Offset, unsigned int Length, string &ByteArray) {
-  string Subset;
-  
-  ArraySubset(Subset, ByteArray, Offset, Length);
-  return Subset;
-}
+// *****  Dictionary API
 
-safecall void setArraySubset(unsigned int Offset, string Subset, string &ByteArray) {
-  ArrayReplace(ByteArray, Offset, Subset);
-}
+// ----- Byte Array access functions (Optimized)
 
-safecall byte getArraySingle(unsigned int Offset, string &ByteArray) {
-  byte Single;
-  
-  asm { index Single, ByteArray, Offset };
-  
-  return Single;
-}
-safecall void setArraySingle(unsigned int Offset, byte Single, string &ByteArray) {
-  ArrayReplace(ByteArray, Offset, Single);
- }
+#define getArraySubset(Offset, Length, ByteArray) asm { arrsubset __STRRETVAL__, ByteArray, Offset, Length }
+#define setArraySubset(Offset, Subset, ByteArray) asm { replace ByteArray, ByteArray, Offset, Subset }
+#define getArraySingle(Offset, ByteArray) asm { index __RETVAL__, ByteArray, Offset }
+#define setArraySingle(Offset, Single, ByteArray) asm { replace ByteArray, ByteArray, Offset, Single }
 
 // ----- Pascal Style Strings
 // "pascalized read"
-safecall string readString(unsigned int Offset, string &ByteArray) {
+inline string readString(unsigned int Offset, string &ByteArray) {
   byte Length;
-  
+
   Length = getArraySingle(Offset,ByteArray);
   Offset++;
   return getArraySubset(Offset, Length, ByteArray);
 }
+
 // "pascalized write"
-safecall void writeString(string String, unsigned int Offset, string &ByteArray) {
+// +1 to store the trailing zero
+inline void writeString(string String, unsigned int Offset, string &ByteArray) {
   byte Length;
   
-  // +1 to store the trailing zero
   Length = StrLen(String) + 1;
   setArraySingle(Offset, Length, ByteArray);
   Offset++;
   setArraySubset(Offset, String, ByteArray);
 }
 
-// ----- Access Functions
-#define getNextFreeNode(Arr) getArraySingle(NEXTNODEOFFSET, Arr)
-#define setNextFreeNode(x,Arr) setArraySingle(NEXTNODEOFFSET, x, Arr)
+// ----- Data Structure Access Functions
+// Offset calculations
+#define getNameOffset(n) n * NODESIZE + NODENAMEOFFSET
+#define getFreeEntryOffset(n) n * NODESIZE + NEXTENTRYOFFSET
+#define getKeyOffset(n, m) n * NODESIZE + m * ENTRYSIZE + KEYOFFSET
+#define getValueOffset(n, m) n * NODESIZE + m * ENTRYSIZE + VALUEOFFSET
 
-safecall string getName(byte n, dict &Dict) {
-  string Name;
+#define getNextFreeNode(Arr) getArraySingle(NEXTNODEOFFSET, Arr)
+#define setNextFreeNode(x, Arr) setArraySingle(NEXTNODEOFFSET, x, Arr)
+
+inline string getName(byte n, dict &Dict) {
   unsigned int Offset;
-  
-  Offset = n * NODESIZE + NODENAMEOFFSET;
-  Name = readString(Offset, Dict);
-  return Name;
+  Offset = getNameOffset(n);
+  return readString(Offset, Dict);
 }
-safecall void setName(byte n, string Name, dict &Dict) {
+
+inline void setName(byte n, string Name, dict &Dict) {
   unsigned int Offset;
-  
-  Offset = n * NODESIZE + NODENAMEOFFSET;
+  Offset = getNameOffset(n);
   writeString(Name, Offset, Dict);
 }
 
-safecall byte getNextFreeEntry(byte n, dict &Dict) {
+inline byte getNextFreeEntry(byte n, dict &Dict) {
   unsigned int Offset;
-  
-  Offset = n * NODESIZE + NEXTENTRYOFFSET;
-  return getArraySingle(Offset, Dict);  
+  Offset = getFreeEntryOffset(n);
+  return getArraySingle(Offset, Dict);
 }
-safecall void setNextFreeEntry(byte n, byte Value, dict &Dict) {
+
+inline void setNextFreeEntry(byte n, byte Value, dict &Dict) {
   unsigned int Offset;
-  
-  Offset = n * NODESIZE + NEXTENTRYOFFSET;
+  Offset = getFreeEntryOffset(n);
   setArraySingle(Offset, Value, Dict);
 }
 
-safecall string getKey(byte n, byte m, dict &Dict) {
+inline string getKey(byte n, byte m, dict &Dict) {
   unsigned int Offset;
-  
-  Offset = n * NODESIZE + m * ENTRYSIZE + KEYOFFSET;
+  Offset = getKeyOffset(n, m);
   return readString(Offset, Dict);
 }
-safecall void setKey(byte n, byte m, string Key, dict &Dict){
+
+inline void setKey(byte n, byte m, string Key, dict &Dict) {
   unsigned int Offset;
-  
-  Offset = n * NODESIZE + m * ENTRYSIZE + KEYOFFSET;
+  Offset = getKeyOffset(n, m);
   writeString(Key, Offset, Dict);
 }
 
-safecall string getValue(byte n, byte m, dict &Dict) {
+inline string getValue(byte n, byte m, dict &Dict) {
   unsigned int Offset;
-  
-  Offset = n * NODESIZE + m * ENTRYSIZE + VALUEOFFSET;
+  Offset = getValueOffset(n, m);
   return readString(Offset, Dict);
 }
-safecall void setValue(byte n, byte m, string Value, dict &Dict) {
-  unsigned int Offset;
 
-  Offset = n * NODESIZE + m * ENTRYSIZE + VALUEOFFSET;
+inline void setValue(byte n, byte m, string Value, dict &Dict) {
+  unsigned int Offset;
+  Offset = getValueOffset(n, m);
   writeString(Value, Offset, Dict);
 }
 
 // ----- Helper Functions
 
-safecall string truncString(string String, unsigned int Length) {
-  string Temp;
-  
-  if(StrLen(String) > Length) {
-    Temp = SubStr(String, 0, Length);
-  } else {
-    Temp = String;
-  }
-  return Temp;
-}
-
 #define truncKey(K) SubStr(K, 0, KEYLENGTH-1)
 #define truncValue(V) SubStr(V, 0, VALUELENGTH-1)
 #define truncNode(N) SubStr(N, 0, NODENAMELENGTH-1)
 
-safecall void addEntry(byte Node, string Key, string Value, dict &Dict) {
-  byte Entry;
-
-  Entry = getNextFreeEntry(Node, Dict);
-  setKey(Node, Entry, Key, Dict);
-  setValue(Node, Entry, Value, Dict);
-  Entry++;
-  setNextFreeEntry(Node, Entry, Dict);
+#define __addEntry(n) n##_addEntry
+#define NewAddEntry(n) void __addEntry(n)(byte Node, string Key, string Value, dict &Dict) {\
+  byte Entry;\
+  Entry = getNextFreeEntry(Node, Dict);\
+  setKey(Node, Entry, Key, Dict);\
+  setValue(Node, Entry, Value, Dict);\
+  Entry++;\
+  setNextFreeEntry(Node, Entry, Dict);\
 }
 
-safecall void addNode(string Name, dict &Dict) {
-  byte NextFreeNode;
-  
-  NextFreeNode = getNextFreeNode(Dict);
-
-  setName(NextFreeNode, Name, Dict);
-  NextFreeNode++;
-  setNextFreeNode(NextFreeNode,Dict);
+#define __addNode(n) n##_addNode
+#define NewAddNode(n) void __addNode(n)(string Name, dict &Dict) {\
+  byte NextFreeNode;\
+  NextFreeNode = getNextFreeNode(Dict);\
+  setName(NextFreeNode, Name, Dict);\
+  NextFreeNode++;\
+  setNextFreeNode(NextFreeNode,Dict);\
 }
 
-safecall bool exists(string Name, byte &CurrentNode, dict &Dict) {
-  byte NumberOfNodes;
-  string TempName;
-  bool NodeExists;
-  
-  NumberOfNodes = getNextFreeNode(Dict);
-  
-  for(CurrentNode = 0; CurrentNode < NumberOfNodes; CurrentNode++) {
-    TempName = getName(CurrentNode, Dict);
-    if(TempName == Name) {
-      NodeExists = true;
-      break;
-    }
-  }
-  return NodeExists;
+#define __exists(n) n##_exists
+#define NewExists(n) bool __exists(n)(string Name, byte &CurrentNode, dict &Dict) {\
+  byte NumberOfNodes;\
+  string TempName;\
+  bool NodeExists = false;\
+  \
+  NumberOfNodes = getNextFreeNode(Dict);\
+  \
+  for(CurrentNode = 0; CurrentNode < NumberOfNodes; CurrentNode++) {\
+    TempName = getName(CurrentNode, Dict);\
+    if(TempName == Name) {\
+      NodeExists = true;\
+      break;\
+    }\
+  }\
+  return NodeExists;\
 }
 
-safecall string lookupKey(byte CurrentNode, string Key, dict &Dict) {
-  byte NumberOfEntries, CurrentEntry;
-  string TempKey;
-  string Value = "";
-  
-  NumberOfEntries = getNextFreeEntry(CurrentNode, Dict);
-  //TextOut(0, LCD_LINE8, "Nof Entries: " + NumToStr(NumberOfEntries));
-
-  for(CurrentEntry = 0; CurrentEntry < NumberOfEntries; CurrentEntry++) {
-    TempKey = getKey(CurrentNode, CurrentEntry, Dict);
-    if(TempKey == Key) {
-      Value = getValue(CurrentNode, CurrentEntry, Dict);
-      break;
-    }
-  }
-  return Value;
+#define __lookupKey(n) n##_lookupKey
+#define NewLookupKey(n) string __lookupKey(n)(byte CurrentNode, string Key, dict &Dict) {\
+  byte NumberOfEntries, CurrentEntry;\
+  string TempKey;\
+  string Value = "";\
+  \
+  NumberOfEntries = getNextFreeEntry(CurrentNode, Dict);\
+  \
+  for(CurrentEntry = 0; CurrentEntry < NumberOfEntries; CurrentEntry++) {\
+    TempKey = getKey(CurrentNode, CurrentEntry, Dict);\
+    if(TempKey == Key) {\
+      Value = getValue(CurrentNode, CurrentEntry, Dict);\
+      break;\
+    }\
+  }\
+  return Value;\
 }
 
-safecall void resetAll(dict &Dict) {
-  byte Node;
-
-  setNextFreeNode(0,Dict);
-  for (Node = 0; Node < NODEPERDICT; Node++) {
-    setNextFreeEntry(Node, 0, Dict);
-  }
+#define __resetAll(n) n##_resetAll
+#define NewResetAll(n) void __resetAll(n)(dict &Dict) {\
+  byte Node;\
+  \
+  setNextFreeNode(0,Dict);\
+  for (Node = 0; Node < NODEPERDICT; Node++) {\
+    setNextFreeEntry(Node, 0, Dict);\
+  }\
 }
 
-// ----- Process Dictionary API
-safecall bool insert(string _Key, string _Value, string _Node, dict &Dict) {
-  byte NumberOfNodes, CurrentNode;
-  string TempNode, Key, Value, Node;
-  bool NodeExists;
-  
-  Key = truncKey(_Key);
-  Value = truncValue(_Value);
-  Node = truncNode(_Node);
-  
-  // hint: CurrentNode is a return value
-  NodeExists = exists(Node, CurrentNode, Dict);
-  
-  if(NodeExists == false) {
-    CurrentNode = getNextFreeNode(Dict);
-    addNode(Node, Dict);
-  }
-  addEntry(CurrentNode, Key, Value, Dict);
+// ----- Helper Functions API Constructor
+#define NewHelperFunctionApi(__n) \
+  NewAddEntry(__n);\
+  NewAddNode(__n);\
+  NewExists(__n);\
+  NewLookupKey(__n);\
+  NewResetAll(__n);
 
-  return true;
+// ----- Dictionary API
+
+#define __insert(n) n##_insert
+#define NewInsert(n) bool __insert(n)(string _Key, string _Value, string _Node, dict &Dict) {\
+  byte CurrentNode;\
+  string Key, Value, Node;\
+  bool NodeExists;\
+  \
+  Key = truncKey(_Key);\
+  Value = truncValue(_Value);\
+  Node = truncNode(_Node);\
+  \
+  NodeExists = __exists(n)(Node, CurrentNode, Dict);\
+  \
+  if(NodeExists == false) {\
+    CurrentNode = getNextFreeNode(Dict);\
+    __addNode(n)(Node, Dict);\
+  }\
+  __addEntry(n)(CurrentNode, Key, Value, Dict);\
+  \
+  return true;\
 }
 
-safecall string lookup(string _Key, string _Node, dict &Dict) {  
-  byte CurrentNode, NumberOfNodes;
-  bool NodeExists;
-  string Value = "", Key, Node;
-  
-  Key = truncKey(_Key);
-  Node = truncNode(_Node);
-  
-  NumberOfNodes = getNextFreeNode(Dict);
-  //TextOut(0, LCD_LINE7, "Nof Nodes: " + NumToStr(NumberOfNodes));
-
-  NodeExists = exists(Node, CurrentNode, Dict);
-  
-  if (NodeExists == true) {
-    Value = lookupKey(CurrentNode, Key, Dict);
-  }
-  return Value;
+#define __lookup(n) n##_lookup
+#define NewLookup(n) string __lookup(n)(string _Key, string _Node, dict &Dict) {\
+  byte CurrentNode = 0;\
+  bool NodeExists;\
+  string Value = "", Key, Node;\
+  \
+  Key = truncKey(_Key);\
+  Node = truncNode(_Node);\
+  \
+  NodeExists = __exists(n)(Node, CurrentNode, Dict);\
+  \
+  if (NodeExists == true) {\
+    Value = __lookupKey(n)(CurrentNode, Key, Dict);\
+  }\
+  return Value;\
 }
+
+// ----- Dictionary API Constructor
+#define NewDictionaryApi(__n) \
+  NewInsert(__n);\
+  NewLookup(__n);
+
+// ***** Constructor for the whole API
+#define NewDictApi(__n) \
+  NewHelperFunctionApi(__n);\
+  NewDictionaryApi(__n);
+
+// ***** Temporary location for instantiation
+
+// Instance for Program()
+NewDictApi(MainTask);
+// Process Dictionary public interface
+#define get(Key, Node) MainTask_lookup(Key, Node, ProgramPDI)
+#define put(Key, Value, Node) MainTask_insert(Key, Value, Node, ProgramPDO)
+
+// Instance for Comm()
+NewDictApi(CommTask);
+// These are just lazy cheats to get it working
+#define lookup CommTask##_lookup
+#define insert CommTask##_insert
+#define resetAll CommTask##_resetAll
+#define exists CommTask##_exists

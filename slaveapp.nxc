@@ -11,11 +11,14 @@ void Program() {
   string sValue = "";
   
   ClearScreen();
-  sValue = get("MasterCtr", Master);
-  TextOut(0, LCD_LINE1, ME);
-  TextOut(0, LCD_LINE2, "Value: " + sValue);
   put("SlaveCtr", NumToStr(Counter), Master);
+  TextOut(0, LCD_LINE1, "Slave: " + NumToStr(Counter));
+  sValue = get("MasterCtr", Master);
+  TextOut(0, LCD_LINE2, "Master: " + sValue);
+  TextOut(0, LCD_LINE3, "Bad Req : " + NumToStr(BadRequests));
+  TextOut(0, LCD_LINE4, "Bad Cmd : " + NumToStr(BadCommands));
+  TextOut(0, LCD_LINE5, "Timeouts: " + NumToStr(Timeouts));
+  TextOut(0, LCD_LINE6, "Cycles  : " + NumToStr(Cycles));
   Counter--;
-
 }
 

@@ -4,10 +4,6 @@
 // Some of these bits may become their own files, one day
 // Header message generation
 
-/* ---------------- Process Dictionary API -------------*/
-#define get(Key, Node) lookup(Key, Node, ProgramPDI)
-#define put(Key, Value, Node) insert(Key, Value, Node, ProgramPDO)
-
 /* ---------------- UTILITY SECTION --------------- */
 string LeftPadTo(int TotalDigits, string Number, string PadCharacter) {
   string Temp;
@@ -36,25 +32,44 @@ float Limit(float Min, float Max, float Value) {
   return Value;
 }
 
+// Multiline string display
+void MultiLine(unsigned char StartLine, unsigned char EndLine, string String) {
+  string Line;
+  unsigned char i, NofLines;
+  
+  NofLines = EndLine - StartLine;
+  for (i = 0; i<=NofLines; i++){
+    Line = SubStr(String, i*16, 16);
+    TextOut(0, 64-8*StartLine, Line);
+    StartLine++;
+  }
+}
+
 /* --------- CYCLIC TIMER API ------------- */
+// INLINEd for multi-thread use
 struct TickTock {
   unsigned long StartTime;
   unsigned long EndTime;
 };
 
-void Tick(TickTock &T) {
+inline void Tick(TickTock &T) {
   T.StartTime = CurrentTick();
 }
 
-void Tock(TickTock &T) {
+inline void Tock(TickTock &T) {
   T.EndTime = CurrentTick();
 }
 
-unsigned long Elapsed(TickTock &T) {
+inline unsigned long Elapsed(TickTock &T) {
   return T.EndTime - T.StartTime;
 }
 
 /* -------------- COMMUNICATION SECTION ----------*/
+
+#define REQMSGLEN 47
+#define RESPMSGLEN 47
+#define ReqMessage(Name, Len, Page) HeaderMessage(Name, Len, Page, REQMSGLEN)
+#define RespMessage(Name, Len, Page) HeaderMessage(Name, Len, Page, RESPMSGLEN)
 
 void SendRS485String(const string msg)
 {
@@ -69,11 +84,6 @@ void SendRS485String(const string msg)
 bool SendingDone(void) {
   return (HSOutputBufferOutPtr() == HSOutputBufferInPtr());
 }
-
-#define REQMSGLEN 47
-#define RESPMSGLEN 47
-#define ReqMessage(Name, Len, Page) HeaderMessage(Name, Len, Page, REQMSGLEN)
-#define RespMessage(Name, Len, Page) HeaderMessage(Name, Len, Page, RESPMSGLEN)
 
 string HeaderMessage(string Name, unsigned int Len, unsigned char Page, unsigned int OwnSize) {
   string tName, tLen, tPage, tPad, tMsg, PadString = "";

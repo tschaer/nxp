@@ -1,7 +1,7 @@
 // jsonparse.nxc
 // 09.12.2011 T Schaer
+// 16.01.2012 Bugfixes & speed mods
 // Parse subset of JSON into a Dictionary object
-// Add Array into grammar, exponents, insignificant whitespace
 // almost RFC 4627 compliant
 
 // Parser BNF:
@@ -31,18 +31,41 @@ unsigned int ArrayPtr;
 
 // Read another character from ParseBuffer
 void updateSymbol(void) {
-  Symbol = ParseBuffer[SymbolPtr];
-  SymbolPtr++;
+  asm {
+    index Symbol, ParseBuffer, SymbolPtr
+    add SymbolPtr, SymbolPtr, 1
+  }
 }
+
 // Accumulate characters
 void addSymbolTo(string &String) {
-  String = String + FlattenVar(Symbol);
+  string Temp;
+  string TempString;
+
+  asm {
+    flatten Temp, Symbol
+    mov TempString, String
+    strcat String, TempString, Temp
+  }
+
   updateSymbol();
 }
-// Eat white space chars
+
+// Eat white space chars: spaces, tabs, newlines
+//  while (isspace(Symbol)) {
+//    updateSymbol();
+//  }
 void eatWhitespace(void) {
-  while (isspace(Symbol)) {
-    updateSymbol();
+  asm {
+      brcmp EQ, EatWhitespace_00, Symbol, 32
+    EatWhitespace_Start: brcmp EQ, EatWhitespace_00, Symbol, 32
+      brcmp EQ, EatWhitespace_00, Symbol, 9
+      brcmp EQ, EatWhitespace_00, Symbol, 13
+      jmp EatWhitespace_End
+    EatWhitespace_00:
+      call updateSymbol
+      jmp EatWhitespace_Start
+    EatWhitespace_End:
   }
 }
 
@@ -179,7 +202,11 @@ string parse_Value(void) {
 void parse_Pair(dict &Dict) {
   string Key, Value;
   eatWhitespace();
-  Key = parse_String();
+  if (Symbol == '"') {
+    Key = parse_String();
+  } else {
+    Key = "";
+  }
   eatWhitespace();
   if (Symbol == ':') {
     updateSymbol();

@@ -149,10 +149,10 @@ void Program() {
 
   if (Calibrated == false) {
     Calibrated = Calibrate();
-    TextOut(0,LCD_LINE1,"GainX: " + NumToStr(GainX));   
-    TextOut(0,LCD_LINE2,"OfstX: " + NumToStr(OffsetX));
-    TextOut(0,LCD_LINE3,"GainY: " + NumToStr(GainY));   
-    TextOut(0,LCD_LINE4,"OfstY: " + NumToStr(OffsetY));
+    //TextOut(0,LCD_LINE1,"GainX: " + NumToStr(GainX));   
+    //TextOut(0,LCD_LINE2,"OfstX: " + NumToStr(OffsetX));
+    //TextOut(0,LCD_LINE3,"GainY: " + NumToStr(GainY));   
+    //TextOut(0,LCD_LINE4,"OfstY: " + NumToStr(OffsetY));
   }
   
   if (Calibrated == true) {
@@ -182,7 +182,6 @@ void Program() {
     put("JsY", "0", Slave);
     put("JsX2", JsX, Slave);
     put("JsY2", JsY, Slave);
-    
   }
   
   TextOut(0,LCD_LINE5,"X: " + LeftPadTo(3,JsX," ") + "  Y: " + LeftPadTo(3,JsY," ") + "   ");   

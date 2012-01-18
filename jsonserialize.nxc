@@ -1,7 +1,7 @@
 // jsonserialize.nxc
-// 05.12.2011 T Schaer
+// 16.01.2012 T Schaer
 // Turn a dictionary into a string with JSON semantics
-// handle negative numbers
+// Should output "{}" for empty Dicts
 
 // only recognizes Values that are numbers or quoted strings
 string serialize_Json(string Node, dict &Dict) {
@@ -11,14 +11,12 @@ string serialize_Json(string Node, dict &Dict) {
   
   exists(Node, CurrentNode, Dict);
   NumberOfEntries = getNextFreeEntry(CurrentNode, Dict);
-  
+  // fix for empty strings
+  Serialized = "{";
   for(CurrentEntry = 0; CurrentEntry < NumberOfEntries; CurrentEntry++) {
     Key = getKey(CurrentNode, CurrentEntry, Dict);
     Value = getValue(CurrentNode, CurrentEntry, Dict);
-    // first pair
-    if(CurrentEntry == 0) {
-      Serialized = "{"; 
-    } else {
+    if (CurrentEntry > 0) {
       Serialized = Serialized + ",";
     }
     Serialized = Serialized + "\"" + Key + "\"" + ":";
