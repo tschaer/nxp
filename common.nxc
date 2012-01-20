@@ -71,8 +71,7 @@ inline unsigned long Elapsed(TickTock &T) {
 #define ReqMessage(Name, Len, Page) HeaderMessage(Name, Len, Page, REQMSGLEN)
 #define RespMessage(Name, Len, Page) HeaderMessage(Name, Len, Page, RESPMSGLEN)
 
-void SendRS485String(const string msg)
-{
+void SendRS485String(const string msg) {
   byte mlen = StrLen(msg)+1;
   SetHSOutputBuffer(0, mlen, msg);
   SetHSOutputBufferOutPtr(0);

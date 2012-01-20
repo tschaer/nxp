@@ -1,8 +1,6 @@
 // slave.nxc
-// 03.01.2012 T Schaer
-// Yield() on each state where nothing happens
-// 12.01.2012 Use Wait() only when waiting for messages
-//            tMain() uses MainTask_ functions
+// 19.01.2012 T Schaer
+// Process Dictionaries with configurable number of Nodes
 
 const string Master = MASTER;
 unsigned int BadRequests, BadCommands, Timeouts, Cycles;
@@ -11,14 +9,14 @@ mutex mxPDI;
 mutex mxPDO;
 
 // Process Dictionary
-byte PDO[DICTSIZE];
-byte PDI[DICTSIZE];
+NewDict(PDO, NOFCOMMPARTNERS);
+NewDict(PDI, NOFCOMMPARTNERS);
 // Comm() Process dictionary
-byte CommPDO[DICTSIZE];
-byte CommPDI[DICTSIZE];
+NewDict(CommPDO, NOFCOMMPARTNERS);
+NewDict(CommPDI, NOFCOMMPARTNERS);
 // Program() Process Dicitonary
-byte ProgramPDO[DICTSIZE];
-byte ProgramPDI[DICTSIZE];
+NewDict(ProgramPDO, NOFCOMMPARTNERS);
+NewDict(ProgramPDI, NOFCOMMPARTNERS);
 
 // Protocol timeouts
 TimerObject ReqMsgFinishTimer;
@@ -45,8 +43,9 @@ void CommInit() {
 
 }
 
+int CommState = -1;
+
 void Comm() {
-  int CommState = -1;
   bool Done = false;
   unsigned char MsgLen, CommandMsgLen;
   string RequestMessage, ResponseMessage;  
@@ -62,6 +61,7 @@ void Comm() {
         Done = true;
         Tock(CommTaskElapsed);
         TextOut(0, LCD_LINE7, "Elapsed : " + NumToStr(Elapsed(CommTaskElapsed)));
+        CommState = -1;
         break;
       case -1:
         // State -1: Initialize

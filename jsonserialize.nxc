@@ -1,32 +1,38 @@
 // jsonserialize.nxc
-// 16.01.2012 T Schaer
+// 19.01.2012 T Schaer
 // Turn a dictionary into a string with JSON semantics
 // Should output "{}" for empty Dicts
+// Don't try to serialize if Node not found!
 
 // only recognizes Values that are numbers or quoted strings
 string serialize_Json(string Node, dict &Dict) {
   byte NumberOfEntries, CurrentEntry, CurrentNode;
-  string Key, Value, Serialized = "";
+  string Key, Value, Serialized;
   char Test;
+  bool NodeExists = false;
   
-  exists(Node, CurrentNode, Dict);
-  NumberOfEntries = getNextFreeEntry(CurrentNode, Dict);
-  // fix for empty strings
   Serialized = "{";
-  for(CurrentEntry = 0; CurrentEntry < NumberOfEntries; CurrentEntry++) {
-    Key = getKey(CurrentNode, CurrentEntry, Dict);
-    Value = getValue(CurrentNode, CurrentEntry, Dict);
-    if (CurrentEntry > 0) {
-      Serialized = Serialized + ",";
-    }
-    Serialized = Serialized + "\"" + Key + "\"" + ":";
-    Test = Value[0];
-    if(isdigit(Test)) {
-      Serialized = Serialized + Value;
-    } else if (Test == '-' && isdigit(Value[1])) {
+
+  NodeExists = exists(Node, CurrentNode, Dict);
+  
+  if (NodeExists == true) {
+    NumberOfEntries = getNextFreeEntry(CurrentNode, Dict);
+  
+    for(CurrentEntry = 0; CurrentEntry < NumberOfEntries; CurrentEntry++) {
+      Key = getKey(CurrentNode, CurrentEntry, Dict);
+      Value = getValue(CurrentNode, CurrentEntry, Dict);
+      if (CurrentEntry > 0) {
+        Serialized = Serialized + ",";
+      }
+      Serialized = Serialized + "\"" + Key + "\"" + ":";
+      Test = Value[0];
+      if(isdigit(Test)) {
         Serialized = Serialized + Value;
-    } else {
-      Serialized = Serialized + "\"" + Value + "\"";
+      } else if (Test == '-' && isdigit(Value[1])) {
+          Serialized = Serialized + Value;
+      } else {
+        Serialized = Serialized + "\"" + Value + "\"";
+      }
     }
   }
   Serialized = Serialized + "}";

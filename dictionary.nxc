@@ -1,51 +1,54 @@
 // dictionary.nxc
-// 11.01.2012 T. Schaer
+// 19.01.2012 T. Schaer
 // Dictionary
-// With function instances
-// Note:
-// 1. Multidimensional arrays are built using single-dimensional arrays,
-//    offset constants, and access functions.
-// 2. Multiple instances of the dictionary API are made using macros
-
-// Function definition is a 3-step process:
-// 1. Define a macro for a function's internal name. This allows it to be
-//    referred to inside other functions of the API
-// 2. Define a macro which contains the function's textual representation along
-//    with a configurable prefix
-// 3. Supply a prefix to the above macro to produce an instance of the function
-//    with a unique name in the symbol table
+// Configurable number of Nodes using "constructor" macro
 
 // ***** Dictionary Data Structure Definition
+// Entry
 // struct Entry {
-//  Key: byte[10]
-//  Value: byte[10]
+//  Key : byte[10];
+//  Value : byte [10];
 // }
-#define KEYLENGTH 10
-#define VALUELENGTH 10
 #define KEYOFFSET 0
-#define VALUEOFFSET KEYLENGTH
-#define ENTRYSIZE KEYLENGTH+VALUELENGTH
+#define KEYLENGTH 10
+#define VALUEOFFSET (KEYOFFSET + KEYLENGTH)
+#define VALUELENGTH 10
+#define ENTRYSIZE (KEYLENGTH + VALUELENGTH)
 
+// Node
 // struct Node {
-//  Entry: Entry[5]
-//  Name: byte[10]
-//  NextFreeEntry: byte
+//  Name : byte[10];
+//  NextFreeEntry : byte;
+//  Entry : Entry[5];
 // }
-#define ENTRYPERNODE 5
+#define NODENAMEOFFSET 0
 #define NODENAMELENGTH 10
-#define NEXTENTRY 1
-#define NODESIZE ENTRYPERNODE*ENTRYSIZE+NODENAMELENGTH+NEXTENTRY
-#define NODENAMEOFFSET ENTRYPERNODE*ENTRYSIZE
-#define NEXTENTRYOFFSET NODENAMEOFFSET+NODENAMELENGTH
+#define NEXTENTRYOFFSET (NODENAMEOFFSET + NODENAMELENGTH)
+#define NEXTENTRYLENGTH 1
+#define ENTRYOFFSET (NEXTENTRYOFFSET + NEXTENTRYLENGTH)
+#define ENTRYPERNODE 5
+#define ENTRYLENGTH ENTRYPERNODE * ENTRYSIZE
+#define NODESIZE (NODENAMELENGTH + NEXTENTRYLENGTH + ENTRYLENGTH)
 
+// Dict
 // struct Dict {
-//  Node: Node[2]
-//  NextFreeNode: byte
+//  NextFreeNode : byte;
+//  Node : Node[2];
 // }
-#define NODEPERDICT 2
-#define NEXTNODE 1
-#define DICTSIZE NODEPERDICT*NODESIZE+NEXTNODE
-#define NEXTNODEOFFSET NODEPERDICT*NODESIZE
+#define NEXTNODEOFFSET 0
+#define NEXTNODELENGTH 1
+#define NODEOFFSET (NEXTNODEOFFSET + NEXTNODELENGTH)
+#define DICTSIZE(n) NEXTNODELENGTH + n * NODESIZE
+
+// Offsets
+#define getFreeNodeOffset() NEXTNODEOFFSET
+#define getNameOffset(n) NODEOFFSET + n * NODESIZE + NODENAMEOFFSET
+#define getFreeEntryOffset(n) NODEOFFSET + n * NODESIZE + NEXTENTRYOFFSET
+#define getKeyOffset(n, m) NODEOFFSET + n * NODESIZE + ENTRYOFFSET + KEYOFFSET + m * ENTRYSIZE
+#define getValueOffset(n, m) NODEOFFSET + n * NODESIZE + ENTRYOFFSET + VALUEOFFSET + m * ENTRYSIZE
+
+// Constructor
+#define NewDict(Name, NofNodes) byte Name##[DICTSIZE(NofNodes)]
 
 // a cheat to be able to pass byte arrays by reference
 typedef string dict;
@@ -61,7 +64,7 @@ typedef string dict;
 
 // ----- Pascal Style Strings
 // "pascalized read"
-inline string readString(unsigned int Offset, string &ByteArray) {
+safecall string readString(unsigned int Offset, string &ByteArray) {
   byte Length;
 
   Length = getArraySingle(Offset,ByteArray);
@@ -71,7 +74,7 @@ inline string readString(unsigned int Offset, string &ByteArray) {
 
 // "pascalized write"
 // +1 to store the trailing zero
-inline void writeString(string String, unsigned int Offset, string &ByteArray) {
+safecall void writeString(string String, unsigned int Offset, string &ByteArray) {
   byte Length;
   
   Length = StrLen(String) + 1;
@@ -81,12 +84,6 @@ inline void writeString(string String, unsigned int Offset, string &ByteArray) {
 }
 
 // ----- Data Structure Access Functions
-// Offset calculations
-#define getNameOffset(n) n * NODESIZE + NODENAMEOFFSET
-#define getFreeEntryOffset(n) n * NODESIZE + NEXTENTRYOFFSET
-#define getKeyOffset(n, m) n * NODESIZE + m * ENTRYSIZE + KEYOFFSET
-#define getValueOffset(n, m) n * NODESIZE + m * ENTRYSIZE + VALUEOFFSET
-
 #define getNextFreeNode(Arr) getArraySingle(NEXTNODEOFFSET, Arr)
 #define setNextFreeNode(x, Arr) setArraySingle(NEXTNODEOFFSET, x, Arr)
 
@@ -136,6 +133,17 @@ inline void setValue(byte n, byte m, string Value, dict &Dict) {
   unsigned int Offset;
   Offset = getValueOffset(n, m);
   writeString(Value, Offset, Dict);
+}
+
+inline byte getNofNodes(dict &Dict) {
+  unsigned int Size, NofNodes;
+  asm {
+    arrsize Size, Dict
+  }
+    Size = Size - NEXTNODELENGTH;
+    NofNodes = Size/NODESIZE;
+    
+  return NofNodes;
 }
 
 // ----- Helper Functions
@@ -204,7 +212,7 @@ inline void setValue(byte n, byte m, string Value, dict &Dict) {
   byte Node;\
   \
   setNextFreeNode(0,Dict);\
-  for (Node = 0; Node < NODEPERDICT; Node++) {\
+  for (Node = 0; Node < getNofNodes(Dict); Node++) {\
     setNextFreeEntry(Node, 0, Dict);\
   }\
 }

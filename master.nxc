@@ -1,8 +1,6 @@
 // master.nxc
-// 03.12.2011 T Schaer
-// 23.12.2011 No LCD output unless on timeout
-// 03.01.2012 Yield() on each state where nothing happens
-// 12.01.2012 Take the Yield()s out, jerky behaviour
+// 19.01.2012 T Schaer
+// Process Dictionaries with configurable number of Nodes
 
 
 const string Slave = SLAVE;
@@ -12,14 +10,14 @@ mutex mxPDI;
 mutex mxPDO;
 
 // Process Dictionary
-byte PDO[DICTSIZE];
-byte PDI[DICTSIZE];
+NewDict(PDO, NOFCOMMPARTNERS);
+NewDict(PDI, NOFCOMMPARTNERS);
 // Comm() Process Dictionary
-byte CommPDO[DICTSIZE];
-byte CommPDI[DICTSIZE];
+NewDict(CommPDO, NOFCOMMPARTNERS);
+NewDict(CommPDI, NOFCOMMPARTNERS);
 // Program() Process Dictionary
-byte ProgramPDO[DICTSIZE];
-byte ProgramPDI[DICTSIZE];
+NewDict(ProgramPDO, NOFCOMMPARTNERS);
+NewDict(ProgramPDI, NOFCOMMPARTNERS);
 
 // Protocol timeouts
 TimerObject RespMsgBeginTimer;
@@ -48,8 +46,9 @@ void CommInit() {
 
 }
 
+int CommState = 0;
+
 void Comm() {
-  int CommState = 0;
   bool Done = false;
   unsigned char MsgLen = 0, StatusMsgLen;
   string RequestMessage, ResponseMessage;
@@ -64,7 +63,8 @@ void Comm() {
         Cycles++;
         Done = true;
         Tock(CommTaskElapsed);
-        TextOut(0, LCD_LINE7, "Elapsed : " + NumToStr(Elapsed(CommTaskElapsed)));
+        TextOut(0, LCD_LINE7, "Elapsed : " + NumToStr(Elapsed(CommTaskElapsed)) + "    ");
+        CommState = 0;
         break;
       case 0:
         Tick(CommTaskElapsed);
