@@ -1,0 +1,80 @@
+// nxp.nxc
+// 08.02.2012 T Schaer
+// Main 
+
+// ----- Declarations and so on
+
+void Program();
+
+NewDictApi(MainTask);
+
+// Alias macros when used for communications protocol
+#define get(Key, Node) MainTask_lookup(Key, Node, PDI_M)
+#define put(Key, Value, Node) MainTask_insert(Key, Value, Node, PDO_M)
+
+// Alias macros when used for hmi
+#define hmiGet(Key, Mailbox) MainTask_lookup(Key, Mailbox, HmiPDI_M)
+#define hmiPut(Key, Value, Mailbox) MainTask_insert(Key, Value, Mailbox, HmiPDO_M)
+
+
+// ----- MainTask
+task MainTask() {
+  TickTock Main;
+  
+  while (true) {
+    Tick(Main);
+    
+    // Input HMI section
+    #if HMITASK
+      MainTask_resetAll(HmiPDI_M);
+      Acquire(mxHmiPDI);
+      HmiPDI_M = HmiPDI;
+      Release(mxHmiPDI);
+    #endif
+
+    // Input comm section
+    #if COMMTASK
+      MainTask_resetAll(PDI_M);  
+      Acquire(mxPDI);
+      PDI_M = PDI;
+      Release(mxPDI);
+    #endif
+        
+    Program();
+    
+    // Output comm section
+    #if COMMTASK
+      Acquire(mxPDO);
+      MainTask_resetAll(PDO);    
+      PDO = PDO_M;
+      Release(mxPDO);
+      MainTask_resetAll(PDO_M);
+    #endif
+    
+    // Output HMI section
+    #if HMITASK
+      Acquire(mxHmiPDO);
+      MainTask_resetAll(HmiPDO);
+      HmiPDO = HmiPDO_M;
+      Release(mxHmiPDO);
+      MainTask_resetAll(HmiPDO_M);
+    #endif
+    
+    // cyclic execution
+    Tock(Main);
+    Wait(MAINCYCLETIME-Elapsed(Main));
+  }  
+}
+
+// ----- Main main()
+// Not like #if :-(
+task main() {
+  StartTask(MainTask);
+  #if COMMTASK 
+    CommInit();
+    StartTask(CommTask);
+  #endif
+  #if HMITASK
+    StartTask(HmiTask);
+  #endif
+}

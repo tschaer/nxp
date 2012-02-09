@@ -1,7 +1,12 @@
 // dictionary.nxc
+<<<<<<< HEAD:dictionary.nxc
 // 19.01.2012 T. Schaer
 // Dictionary
 // Configurable number of Nodes using "constructor" macro
+=======
+// 08.02.2012 T. Schaer
+// Dictionary API
+>>>>>>> hmiwork:src/dictionary.nxc
 
 // ***** Dictionary Data Structure Definition
 // Entry
@@ -33,7 +38,11 @@
 // Dict
 // struct Dict {
 //  NextFreeNode : byte;
+<<<<<<< HEAD:dictionary.nxc
 //  Node : Node[2];
+=======
+//  Node : Node[n];
+>>>>>>> hmiwork:src/dictionary.nxc
 // }
 #define NEXTNODEOFFSET 0
 #define NEXTNODELENGTH 1
@@ -42,18 +51,26 @@
 
 // Offsets
 #define getFreeNodeOffset() NEXTNODEOFFSET
+<<<<<<< HEAD:dictionary.nxc
 #define getNameOffset(n) NODEOFFSET + n * NODESIZE + NODENAMEOFFSET
 #define getFreeEntryOffset(n) NODEOFFSET + n * NODESIZE + NEXTENTRYOFFSET
 #define getKeyOffset(n, m) NODEOFFSET + n * NODESIZE + ENTRYOFFSET + KEYOFFSET + m * ENTRYSIZE
 #define getValueOffset(n, m) NODEOFFSET + n * NODESIZE + ENTRYOFFSET + VALUEOFFSET + m * ENTRYSIZE
+=======
+#define getNameOffset(n) (NODEOFFSET + n * NODESIZE + NODENAMEOFFSET)
+#define getFreeEntryOffset(n) (NODEOFFSET + n * NODESIZE + NEXTENTRYOFFSET)
+#define getKeyOffset(n, m) (NODEOFFSET + n * NODESIZE + ENTRYOFFSET + KEYOFFSET + m * ENTRYSIZE)
+#define getValueOffset(n, m) (NODEOFFSET + n * NODESIZE + ENTRYOFFSET + VALUEOFFSET + m * ENTRYSIZE)
+>>>>>>> hmiwork:src/dictionary.nxc
 
 // Constructor
 #define NewDict(Name, NofNodes) byte Name##[DICTSIZE(NofNodes)]
 
-// a cheat to be able to pass byte arrays by reference
-typedef string dict;
 
 // *****  Dictionary API
+
+// a cheat to be able to pass byte arrays by reference
+typedef string dict;
 
 // ----- Byte Array access functions (Optimized)
 
@@ -66,7 +83,6 @@ typedef string dict;
 // "pascalized read"
 safecall string readString(unsigned int Offset, string &ByteArray) {
   byte Length;
-
   Length = getArraySingle(Offset,ByteArray);
   Offset++;
   return getArraySubset(Offset, Length, ByteArray);
@@ -84,6 +100,7 @@ safecall void writeString(string String, unsigned int Offset, string &ByteArray)
 }
 
 // ----- Data Structure Access Functions
+<<<<<<< HEAD:dictionary.nxc
 #define getNextFreeNode(Arr) getArraySingle(NEXTNODEOFFSET, Arr)
 #define setNextFreeNode(x, Arr) setArraySingle(NEXTNODEOFFSET, x, Arr)
 
@@ -92,12 +109,17 @@ inline string getName(byte n, dict &Dict) {
   Offset = getNameOffset(n);
   return readString(Offset, Dict);
 }
+=======
+#define getNextFreeNode(Dict) getArraySingle(NEXTNODEOFFSET, Dict)
+#define setNextFreeNode(x, Dict) setArraySingle(NEXTNODEOFFSET, x, Dict)
+>>>>>>> hmiwork:src/dictionary.nxc
 
-inline void setName(byte n, string Name, dict &Dict) {
-  unsigned int Offset;
-  Offset = getNameOffset(n);
-  writeString(Name, Offset, Dict);
-}
+#define getName(Nth, Dict) readString(getNameOffset(Nth), Dict)
+#define setName(Nth, Name, Dict) writeString(Name, getNameOffset(Nth), Dict)
+#define getKey(Nth, Mth, Dict) readString(getKeyOffset(Nth, Mth), Dict)
+#define setKey(Nth, Mth, Key, Dict) writeString(Key, getKeyOffset(Nth, Mth), Dict)
+#define getValue(Nth, Mth, Dict) readString(getValueOffset(Nth, Mth), Dict)
+#define setValue(Nth, Mth, Value, Dict) writeString(Value, getValueOffset(Nth, Mth), Dict)
 
 inline byte getNextFreeEntry(byte n, dict &Dict) {
   unsigned int Offset;
@@ -111,28 +133,15 @@ inline void setNextFreeEntry(byte n, byte Value, dict &Dict) {
   setArraySingle(Offset, Value, Dict);
 }
 
-inline string getKey(byte n, byte m, dict &Dict) {
-  unsigned int Offset;
-  Offset = getKeyOffset(n, m);
-  return readString(Offset, Dict);
-}
-
-inline void setKey(byte n, byte m, string Key, dict &Dict) {
-  unsigned int Offset;
-  Offset = getKeyOffset(n, m);
-  writeString(Key, Offset, Dict);
-}
-
-inline string getValue(byte n, byte m, dict &Dict) {
-  unsigned int Offset;
-  Offset = getValueOffset(n, m);
-  return readString(Offset, Dict);
-}
-
-inline void setValue(byte n, byte m, string Value, dict &Dict) {
-  unsigned int Offset;
-  Offset = getValueOffset(n, m);
-  writeString(Value, Offset, Dict);
+inline byte getNofNodes(dict &Dict) {
+  unsigned int Size, NofNodes;
+  asm {
+    arrsize Size, Dict
+    sub Size, Size, NEXTNODELENGTH
+  }
+  NofNodes = Size/NODESIZE;
+    
+  return NofNodes;
 }
 
 inline byte getNofNodes(dict &Dict) {
@@ -274,19 +283,3 @@ inline byte getNofNodes(dict &Dict) {
 #define NewDictApi(__n) \
   NewHelperFunctionApi(__n);\
   NewDictionaryApi(__n);
-
-// ***** Temporary location for instantiation
-
-// Instance for Program()
-NewDictApi(MainTask);
-// Process Dictionary public interface
-#define get(Key, Node) MainTask_lookup(Key, Node, ProgramPDI)
-#define put(Key, Value, Node) MainTask_insert(Key, Value, Node, ProgramPDO)
-
-// Instance for Comm()
-NewDictApi(CommTask);
-// These are just lazy cheats to get it working
-#define lookup CommTask##_lookup
-#define insert CommTask##_insert
-#define resetAll CommTask##_resetAll
-#define exists CommTask##_exists

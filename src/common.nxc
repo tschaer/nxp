@@ -1,8 +1,9 @@
 // common.nxc
-// 03.12.2011 T Schaer
-// A place to put common code
-// Some of these bits may become their own files, one day
-// Header message generation
+// 09.02.2011 T Schaer
+// Leftover stuff
+
+#define MASTERNODE 1
+#define SLAVENODE 2
 
 /* ---------------- UTILITY SECTION --------------- */
 string LeftPadTo(int TotalDigits, string Number, string PadCharacter) {

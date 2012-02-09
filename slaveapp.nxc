@@ -2,7 +2,7 @@
 // 04.12.2011 T Schaer
 // Demo Slave Application
 
-#include "nxpslave.h"
+#include "slaveapp.h"
 
 unsigned int Counter = 0xFFFF;
 

@@ -1,0 +1,22 @@
+// standalone.nxc
+// 08.02.2012 T Schaer
+// Demo Standalone Application
+
+#include "standalone.h"
+
+unsigned int Counter = 0;
+
+// Cyclic application program
+void Program() {
+    string sValue = "";
+
+    sValue = hmiGet("value", "Mailbox0");
+    if (sValue != "") {
+        Counter = StrToNum(sValue);
+    }
+    TextOut(0, LCD_LINE1, "Counter: " + NumToStr(Counter) + "    ");
+    hmiPut("id", "Counter", "Mailbox10");    
+    hmiPut("value", NumToStr(Counter), "Mailbox10");
+    
+    Counter++;
+}

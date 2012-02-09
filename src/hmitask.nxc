@@ -1,0 +1,71 @@
+// hmitask.nxc
+// 08.02.2012
+// HmiTask()
+
+// ----- Variables & Instances
+
+mutex mxHmiPDO;
+mutex mxHmiPDI;
+
+NewDict(HmiPDO_M, NOFMAILBOXES);
+NewDict(HmiPDI_M, NOFMAILBOXES);
+
+NewDict(HmiPDO, NOFMAILBOXES);
+NewDict(HmiPDI, NOFMAILBOXES);
+
+NewDict(HmiPDO_H, NOFMAILBOXES);
+NewDict(HmiPDI_H, NOFMAILBOXES);
+
+// Instances
+NewDictApi(HmiTask);
+NewJsonParser(HmiTask);
+NewJsonSerializer(HmiTask);
+
+// ----- Code
+void Hmi() {
+  string Mailbox0, Mailbox10;
+  
+  // ----- Output to BT
+  // Import PDO to local copy
+  HmiTask_resetAll(HmiPDO_H);
+  Acquire(mxHmiPDO);
+  HmiPDO_H = HmiPDO;
+  Release(mxHmiPDO);
+
+  // Serialize
+  Mailbox10 = HmiTask_serializeJson("Mailbox10", HmiPDO_H);
+  // Send
+  if (Mailbox10 != "{}") {
+    SendMessage(0x0A,Mailbox10);
+  }
+
+  // ----- Input from BT
+  HmiTask_resetAll(HmiPDI_H);
+  
+  // Parse
+  if (ReceiveMessage(0, true, Mailbox0) == 0) {
+    HmiTask_parseJson(Mailbox0, "Mailbox0", HmiPDI_H);
+  }
+
+  // Export local copy to PDI
+  Acquire(mxHmiPDI);
+  HmiTask_resetAll(HmiPDI);
+  HmiPDI = HmiPDI_H;
+  Release(mxHmiPDI);
+
+}
+
+// ----- Task
+task HmiTask() {
+  TickTock HmiElapsed;
+
+  while (true) {
+    Tick(HmiElapsed);
+    
+    Hmi();
+    
+    Tock(HmiElapsed);
+    Wait(HMICYCLETIME-Elapsed(HmiElapsed)); 
+  }
+}
+

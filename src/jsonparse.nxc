@@ -1,0 +1,307 @@
+// jsonparse.nxc
+// 08.02.2012
+// JSON parser
+
+// ----- Parser BNF:
+// text = array | object
+// array = [] | [elements]
+// elements = value | value,elements
+// object = {} | {members}
+// members = pair | pair,members
+// pair = string:value
+// value = string | number | nestedobject | nestedarray | true | false | null | undefined
+// nestedobject = {} | {anything}
+// nestedarray = [] | [anything]
+// string = "" | "anything"
+// anything = any ASCII character except the "close character" for that application eg }, ], "
+// chars = anything that gets by ctypes::isalnum() or '_' or '-'
+// number = integers | -integers | reals | -reals
+// integers = one or more of digits 0-9
+// reals = one or more of digits 0-9 followed by optional decimal dot followed
+//         by zero or more digits 0-9 followed by e or E followed by optional
+//         plus or minus followed by zero or more digits 0-9
+
+// ----- Per-parser variables
+
+#define __ParserState(n) n##_ParserState
+#define NewParserState(n) parserState __ParserState(n)
+
+struct parserState {
+  string ParseBuffer;
+  string Node;
+  char Symbol;
+  unsigned int SymbolPtr;
+};
+
+// ----- Auxiliary functions 1
+
+// Read another character from ParseBuffer
+#define __updateSymbol(n) n##_updateSymbol
+#define NewUpdateSymbol(n) void __updateSymbol(n)(void) {\
+  asm {\
+    index __ParserState(n).Symbol, __ParserState(n).ParseBuffer, __ParserState(n).SymbolPtr\
+    add __ParserState(n).SymbolPtr, __ParserState(n).SymbolPtr, 1\
+  }\
+}
+
+// Eat white space chars: spaces, tabs, newlines
+#define __eatWhitespace(n) n##_eatWhitespace
+#define NewEatWhitespace(n) void __eatWhitespace(n)(void) {\
+  asm {\
+      brcmp EQ, EatWhitespace_00, __ParserState(n).Symbol, 32\
+    EatWhitespace_Start: brcmp EQ, EatWhitespace_00, __ParserState(n).Symbol, 32\
+      brcmp EQ, EatWhitespace_00, __ParserState(n).Symbol, 9\
+      brcmp EQ, EatWhitespace_00, __ParserState(n).Symbol, 13\
+      jmp EatWhitespace_End\
+    EatWhitespace_00:\
+      call __updateSymbol(n)\
+      jmp EatWhitespace_Start\
+    EatWhitespace_End:\
+  }\
+}
+
+// Constructor macro
+#define NewAuxFunctions1(__n) \
+  NewUpdateSymbol(__n);\
+  NewEatWhitespace(__n);
+
+// ----- Auxiliary functions 2
+
+#define __startChunk(n) __ParserState(n).SymbolPtr - 1;
+
+#define __getChunk(n) n##_getChunk
+#define NewGetChunk(n) inline string __getChunk(n)(unsigned int StartIndex) {\
+  unsigned int NofChars;\
+  \
+  NofChars = __ParserState(n).SymbolPtr - StartIndex - 1;\
+  return SubStr(__ParserState(n).ParseBuffer, StartIndex, NofChars);\
+}
+
+#define __getUpTo(n) n##_getUpTo
+#define NewGetUpTo(n) string __getUpTo(n)(char Closing) {\
+  string Chunk = "";\
+  unsigned int StartIndex;\
+  \
+  __updateSymbol(n)(); \
+  StartIndex = __startChunk(n);\
+  \
+  while (__ParserState(n).Symbol != Closing) {\
+    __updateSymbol(n)();\
+  }\
+  Chunk = __getChunk(n)(StartIndex);\
+  __updateSymbol(n)();\
+  return Chunk;\
+}
+
+#define __getUpToAndIncluding(n) n##_getUpToAndIncluding
+#define NewGetUpToAndIncluding(n) string __getUpToAndIncluding(n)(char Closing) {\
+  string Chunk = "";\
+  unsigned int StartIndex;\
+  \
+  StartIndex = __startChunk(n);\
+  \
+  while (__ParserState(n).Symbol != Closing) {\
+    __updateSymbol(n)();\
+  }\
+  __updateSymbol(n)();\
+  Chunk = __getChunk(n)(StartIndex);\
+  return Chunk;\
+}
+
+// Constructor macro
+#define NewAuxFunctions2(__n) \
+  NewGetChunk(__n);\
+  NewGetUpTo(__n);\
+  NewGetUpToAndIncluding(__n);
+
+// ---- Parser functions
+
+#define __parseString(n) __getUpTo(n)('"')
+#define __parseNestedObject(n) __getUpToAndIncluding(n)('}')
+#define __parseNestedArray(n) __getUpToAndIncluding(n)(']')
+
+#define __parseChars(n) n##_parseChars
+#define NewParseChars(n) string __parseChars(n)(void) {\
+  string Chars = "";\
+  unsigned int StartIndex;\
+  \
+  StartIndex = __startChunk(n);\
+  while (isalnum(__ParserState(n).Symbol) || __ParserState(n).Symbol == '_' || __ParserState(n).Symbol == '-') {\
+    __updateSymbol(n)();\
+  }\
+  Chars = __getChunk(n)(StartIndex);\
+  return Chars;\
+}
+
+// Recognize numbers
+#define __parseNumber(n) n##_parseNumber
+#define NewParseNumber(n) string __parseNumber(n)(void) {\
+  string Number = "";\
+  unsigned int StartIndex;\
+  \
+  StartIndex = __startChunk(n);\
+  \
+  if (__ParserState(n).Symbol == '-') {\
+    __updateSymbol(n)();\
+  }\
+  while (isdigit(__ParserState(n).Symbol)) {\
+    __updateSymbol(n)();\
+  }\
+  if (__ParserState(n).Symbol == '.') {\
+    __updateSymbol(n)();\
+    while (isdigit(__ParserState(n).Symbol)) {\
+      __updateSymbol(n)();\
+    }\
+  }\
+  if (__ParserState(n).Symbol == 'e' || __ParserState(n).Symbol == 'E') {\
+    __updateSymbol(n)();\
+    if (__ParserState(n).Symbol == '-' || __ParserState(n).Symbol == '+') {\
+      __updateSymbol(n)();\
+    }\
+    while (isdigit(__ParserState(n).Symbol)) {\
+      __updateSymbol(n)();\
+    }\
+  }\
+  Number = __getChunk(n)(StartIndex);\
+  \
+  return Number;\
+}
+
+// Decide what Value is
+#define __parseValue(n) n##_parseValue
+#define NewParseValue(n) string __parseValue(n)(void) {\
+  int i;\
+  string Value = "";\
+  \
+  if (__ParserState(n).Symbol == '"') {\
+    Value = __parseString(n);\
+  } else if (isdigit(__ParserState(n).Symbol) || __ParserState(n).Symbol == '-') {\
+    Value = __parseNumber(n)();\
+  } else if (__ParserState(n).Symbol == '{') {\
+    Value = __parseNestedObject(n);\
+  } else if (__ParserState(n).Symbol == '[') {\
+    Value = __parseNestedArray(n);\
+  } else if (__ParserState(n).Symbol == 't') {\
+    for(i=0; i<4; i++){\
+      __updateSymbol(n)();\
+    }\
+    Value = "true";\
+  } else if (__ParserState(n).Symbol == 'f') {\
+    for(i=0; i<5; i++){\
+      __updateSymbol(n)();\
+    }\
+    Value = "false";\
+  } else if (__ParserState(n).Symbol == 'n') {\
+    for(i=0; i<4; i++){\
+      __updateSymbol(n)();\
+    }\
+    Value = "null";\
+  } else {\
+    __parseChars(n)();\
+    Value = "undefined";\
+  }\
+  return Value;\
+}
+
+// Get Key & Value
+#define __parsePair(n) n##_parsePair
+#define NewParsePair(n) void __parsePair(n)(dict &Dict) {\
+  string Key, Value;\
+  \
+  __eatWhitespace(n)();\
+  if (__ParserState(n).Symbol == '"') {\
+    Key = __parseString(n);\
+    __eatWhitespace(n)();\
+    if (__ParserState(n).Symbol == ':') {\
+      __updateSymbol(n)();\
+      __eatWhitespace(n)();\
+      Value = __parseValue(n)();\
+      __insert(n)(Key, Value, __ParserState(n).Node, Dict);\
+    }\
+  }\
+}
+
+// Parse all Elements in an Array
+#define __parseArray(n) n##_parseArray
+#define NewParseArray(n) bool __parseArray(n)(dict &Dict) {\
+  string Key, Value;\
+  unsigned int ArrayPtr = 0;\
+  \
+  __updateSymbol(n)();\
+  \
+  while(1) {\
+    Key = NumToStr(ArrayPtr);\
+    ArrayPtr++;\
+    __eatWhitespace(n)();\
+    Value = __parseValue(n)();\
+    __insert(n)(Key, Value, __ParserState(n).Node, Dict);\
+    __eatWhitespace(n)();\
+    \
+    if (__ParserState(n).Symbol == ',') {\
+      __updateSymbol(n)();\
+      __eatWhitespace(n)();\
+    } else {\
+      break;\
+    }\
+  }\
+  \
+  return (__ParserState(n).Symbol == ']');\
+}
+
+// Parse all Members in an Object
+#define __parseObject(n) n##_parseObject
+#define NewParseObject(n) bool __parseObject(n)(dict &Dict) {\
+  \
+  __updateSymbol(n)();\
+  \
+  while(1) {\
+    __parsePair(n)(Dict);\
+    __eatWhitespace(n)();\
+    if (__ParserState(n).Symbol == ',') {\
+      __updateSymbol(n)();\
+      __eatWhitespace(n)();\
+    } else {\
+      break;\
+    }\
+  }\
+  return (__ParserState(n).Symbol == '}');\
+}
+
+// Return value is "false" only if Buffer is unparseable
+#define __parseJson(n) n##_parseJson
+#define NewParseJson(n) bool __parseJson(n)(const string &Buffer, const string &Name, dict &Dict) {\
+  bool Status;\
+  \
+  __ParserState(n).SymbolPtr = 0;\
+  __ParserState(n).ParseBuffer = Buffer;\
+  __ParserState(n).Node = Name;\
+  \
+  __updateSymbol(n)();\
+  __eatWhitespace(n)();\
+  \
+  if (__ParserState(n).Symbol == '{') {\
+    Status = __parseObject(n)(Dict);\
+  } else if (__ParserState(n).Symbol == '[') {\
+    Status = __parseArray(n)(Dict);\
+  } else {\
+    Status = false;\
+  }\
+  return Status;\
+}
+
+// Constructor macro
+#define NewParserFunctions(__n)\
+  NewParseChars(__n);\
+  NewParseNumber(__n);\
+  NewParseValue(__n);\
+  NewParsePair(__n);\
+  NewParseArray(__n);\
+  NewParseObject(__n);\
+  NewParseJson(__n);\
+  
+// ----- Constructor for the whole shootin match
+#define NewJsonParser(n) \
+  NewParserState(n);\
+  NewAuxFunctions1(n);\
+  NewAuxFunctions2(n);\
+  NewParserFunctions(n);

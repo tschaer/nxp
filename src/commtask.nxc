@@ -1,0 +1,41 @@
+// commtask.nxc
+// 08.02.2012 T Schaer
+// CommTask()
+
+// ----- Variables and Instances
+
+mutex mxPDO;
+mutex mxPDI;
+
+NewDict(PDO, NOFCOMMPARTNERS);
+NewDict(PDI, NOFCOMMPARTNERS);
+
+NewDict(PDO_M, NOFCOMMPARTNERS);
+NewDict(PDI_M, NOFCOMMPARTNERS);
+
+NewDict(PDO_C, NOFCOMMPARTNERS);
+NewDict(PDI_C, NOFCOMMPARTNERS);
+
+// Instances
+NewDictApi(CommTask);
+NewJsonParser(CommTask);
+NewJsonSerializer(CommTask);
+
+// ----- Code
+// Not like #if :-(
+#if NODETYPE == MASTERNODE
+  #include "src/mastercomm.nxc"
+#endif
+#if NODETYPE == SLAVENODE
+  #include "src/slavecomm.nxc"
+#endif
+
+// ----- Task
+task CommTask() {
+  CommTask_resetAll(PDI);
+
+  while(true) {
+    Comm();
+  }
+}
+

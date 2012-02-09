@@ -1,23 +1,12 @@
-// master.nxc
-// 19.01.2012 T Schaer
-// Process Dictionaries with configurable number of Nodes
+// mastercomm.nxc
+// 08.02.2012 T Schaer
+// Master communication code
 
-
+// ----- Variables
+int CommState = 0;
 const string Slave = SLAVE;
+
 unsigned int BadResponses, BadStatuses, Timeouts, Cycles;
-
-mutex mxPDI;
-mutex mxPDO;
-
-// Process Dictionary
-NewDict(PDO, NOFCOMMPARTNERS);
-NewDict(PDI, NOFCOMMPARTNERS);
-// Comm() Process Dictionary
-NewDict(CommPDO, NOFCOMMPARTNERS);
-NewDict(CommPDI, NOFCOMMPARTNERS);
-// Program() Process Dictionary
-NewDict(ProgramPDO, NOFCOMMPARTNERS);
-NewDict(ProgramPDI, NOFCOMMPARTNERS);
 
 // Protocol timeouts
 TimerObject RespMsgBeginTimer;
@@ -25,6 +14,7 @@ TimerObject RespMsgFinishTimer;
 TimerObject StatusMsgBeginTimer;
 TimerObject StatusMsgFinishTimer;
 
+// ----- Code
 void CommInit() {
   // Set up High Speed port
   SetSensorType(IN_4, SENSOR_TYPE_HIGHSPEED);
@@ -46,11 +36,9 @@ void CommInit() {
 
 }
 
-int CommState = 0;
-
 void Comm() {
   bool Done = false;
-  unsigned char MsgLen = 0, StatusMsgLen;
+  unsigned char MsgLen, StatusMsgLen;
   string RequestMessage, ResponseMessage;
   string CommandMessage, StatusMessage;
   string sTemp;
@@ -61,22 +49,22 @@ void Comm() {
       case -1:
         // State -1: Communication finished
         Cycles++;
-        Done = true;
         Tock(CommTaskElapsed);
         TextOut(0, LCD_LINE7, "Elapsed : " + NumToStr(Elapsed(CommTaskElapsed)) + "    ");
+        Done = true;
         CommState = 0;
         break;
       case 0:
-        Tick(CommTaskElapsed);
         // State 0: Initialize
-        resetAll(CommPDI);
-        resetAll(CommPDO);
-        // Get PDO
-        Acquire(mxPDO);
-        CommPDO = PDO;
-        Release(mxPDO);
+        Tick(CommTaskElapsed);
+        CommTask_resetAll(PDI_C);
+        CommTask_resetAll(PDO_C);
+         // Get PDO
+         Acquire(mxPDO);
+         PDO_C = PDO;
+         Release(mxPDO);
         // Generate messages
-        CommandMessage = serialize_Json(Slave, CommPDO);
+        CommandMessage = CommTask_serializeJson(Slave, PDO_C);
         RequestMessage = ReqMessage(Slave, StrLen(CommandMessage), 0);
         // Send Request Message
         SetHSInputBufferInPtr(0);
@@ -108,8 +96,8 @@ void Comm() {
         if (MsgLen >= RESPMSGLEN+1) {
           GetHSInputBuffer(0, RESPMSGLEN+1, ResponseMessage);
           SetHSInputBufferInPtr(0);
-          if (parse_Json(ResponseMessage, "Response", CommPDI) == true){
-            sTemp = lookup("len", "Response", CommPDI);
+          if (CommTask_parseJson(ResponseMessage, "Response", PDI_C) == true){
+            sTemp = CommTask_lookup("len", "Response", PDI_C);
             StatusMsgLen = StrToNum(sTemp);
             SendRS485String(CommandMessage);
             CommState = 4;
@@ -149,14 +137,14 @@ void Comm() {
         MsgLen = HSInputBufferInPtr();
         if (MsgLen >= StatusMsgLen + 1) {
           GetHSInputBuffer(0, MsgLen, StatusMessage);
-          resetAll(CommPDI);
-          if (parse_Json(StatusMessage, Slave, CommPDI) == false ) {
+          CommTask_resetAll(PDI_C);
+          if (CommTask_parseJson(StatusMessage, Slave, PDI_C) == false ) {
             BadStatuses++;
             TextOut(0, LCD_LINE8, "Bad Status Msg");
           }
           Acquire(mxPDI);
-          resetAll(PDI);
-          PDI = CommPDI;
+          CommTask_resetAll(PDI);
+          PDI = PDI_C;
           Release(mxPDI);
           CommState = -1;     
         } else if (CheckTimer(StatusMsgFinishTimer) == true) {
@@ -174,47 +162,3 @@ void Comm() {
   }
 }
 
-// Forward reference for Master Application
-void Program();
-
-task tMain() {
-  TickTock Main;
-  
-  MainTask_resetAll(PDO);
-
-  while (true) {
-    Tick(Main);
-    
-    // Input comm section
-    MainTask_resetAll(ProgramPDI);  
-    Acquire(mxPDI);
-    ProgramPDI = PDI;
-    Release(mxPDI);
-    
-    Program();
-    
-    // Output comm section
-    Acquire(mxPDO);
-    MainTask_resetAll(PDO);    
-    PDO = ProgramPDO;
-    Release(mxPDO);
-    MainTask_resetAll(ProgramPDO);
-    
-    // cyclic execution
-    Tock(Main);
-    Wait(CYCLETIME-Elapsed(Main));
-  }  
-}
-
-task tComm() {
-  CommTask_resetAll(PDI);
-
-  while(true) {
-    Comm();
-  }
-}
-
-task main() {
-  CommInit();
-  Precedes(tMain, tComm);
-}

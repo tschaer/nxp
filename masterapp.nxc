@@ -1,10 +1,10 @@
 // masterapp.nxc
-// 04.12.2011 T Schaer
+// 08.02.2011 T Schaer
 // Demo Master Application
 
-#include "nxpmaster.h"
+#include "masterapp.h"
 
-unsigned int Counter;
+unsigned int Counter = 0;
 
 // Cyclic application program
 void Program() {
@@ -12,6 +12,10 @@ void Program() {
 
     ClearScreen();
     put("MasterCtr", NumToStr(Counter), Slave);
+    sValue = hmiGet("value", "Mailbox0");
+    if (sValue != "") {
+        Cycles = StrToNum(sValue);
+    }
     TextOut(0, LCD_LINE1, "Master: " + NumToStr(Counter));
     sValue = get("SlaveCtr", Slave);
     TextOut(0, LCD_LINE2, "Slave : " + sValue);
@@ -19,5 +23,9 @@ void Program() {
     TextOut(0, LCD_LINE4, "Bad Stat: "+NumToStr(BadStatuses));
     TextOut(0, LCD_LINE5, "Timeouts: "+NumToStr(Timeouts));
     TextOut(0, LCD_LINE6, "Cycles  : "+NumToStr(Cycles));
+    
+    hmiPut("value", NumToStr(Cycles), "Mailbox10");
+    hmiPut("id", "hours", "Mailbox10");
+    
     Counter++;
 }
